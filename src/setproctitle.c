@@ -50,6 +50,7 @@
 #if !HAVE_SETPROCTITLE
 #if (defined __linux || defined __APPLE__)
 
+//全局环境变量
 extern char **environ;
 
 static struct {
@@ -61,7 +62,7 @@ static struct {
 
 	 /* pointer to original nul character within base */
 	char *nul;
-
+     //_Bool是C99新增加的关键字，长度是1
 	_Bool reset;
 	int error;
 } SPT;
@@ -157,6 +158,7 @@ void spt_init(int argc, char *argv[]) {
 	if (!(base = argv[0]))
 		return;
 
+	//进程名字符串的结束位置(不包括\0)
 	nul = &base[strlen(base)];
 	end = nul + 1;
 
@@ -207,7 +209,7 @@ void spt_init(int argc, char *argv[]) {
 
 	return;
 syerr:
-	error = errno;
+	error = errno;//Linux中系统调用的错误都存储于 errno中，errno由操作系统维护，存储就近发生的错误
 error:
 	SPT.error = error;
 } /* spt_init() */
