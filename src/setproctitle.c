@@ -58,10 +58,10 @@ static struct {
 	const char *arg0;
 
 	/* title space available */
-	char *base, *end;
+	char *base, *end; //base指向argv[0]指向的字符串的起始位置 end:指向旧的环境变量的结尾处，之间的空间就是新的名称可用范围
 
 	 /* pointer to original nul character within base */
-	char *nul;
+	char *nul;//执行argv[0]最初指向的字符串的末尾的位置
      //_Bool是C99新增加的关键字，长度是1
 	_Bool reset;
 	int error;
@@ -100,7 +100,11 @@ static int spt_clearenv(void) {
 #endif
 } /* spt_clearenv() */
 
-
+/**
+ * 复制旧的环境变量到新位置
+ * @param oldenv
+ * @return
+ */
 static int spt_copyenv(char *oldenv[]) {
 	extern char **environ;
 	char *eq;
@@ -131,7 +135,12 @@ error:
 	return error;
 } /* spt_copyenv() */
 
-
+/**
+ * 复制一份新的argv
+ * @param argc
+ * @param argv
+ * @return
+ */
 static int spt_copyargs(int argc, char *argv[]) {
 	char *tmp;
 	int i;
@@ -143,25 +152,30 @@ static int spt_copyargs(int argc, char *argv[]) {
 		if (!(tmp = strdup(argv[i])))
 			return errno;
 
-		argv[i] = tmp;
+		argv[i] = tmp;//指向先分配的位置
 	}
 
 	return 0;
 } /* spt_copyargs() */
 
-
+//修改进程名称,
+//argv 后边紧接着是environ
 void spt_init(int argc, char *argv[]) {
         char **envp = environ;
+        //base:指向argv[0]指向的字符串的初始位置
+        //end：指向环境变量的结尾处
 	char *base, *end, *nul, *tmp;
 	int i, error;
 
 	if (!(base = argv[0]))
 		return;
 
-	//进程名字符串的结束位置(不包括\0)
+	//进程名字符串(argv[0]指向的字符串)的结束位置(包括\0)
 	nul = &base[strlen(base)];
-	end = nul + 1;
+	end = nul + 1;//+1指向environ第一个字符位置
 
+	//超过argc数量i后,argv[i]为null
+	//找到最后一个argv的位置
 	for (i = 0; i < argc || (i >= argc && argv[i]); i++) {
 		if (!argv[i] || argv[i] < end)
 			continue;
@@ -169,6 +183,7 @@ void spt_init(int argc, char *argv[]) {
 		end = argv[i] + strlen(argv[i]) + 1;
 	}
 
+	//移动可用位置到环境变量的结尾
 	for (i = 0; envp[i]; i++) {
 		if (envp[i] < end)
 			continue;

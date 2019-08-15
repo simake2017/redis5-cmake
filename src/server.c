@@ -4037,6 +4037,7 @@ int main(int argc, char **argv) {
 
     /* We need to initialize our libraries, and the server configuration. */
 #ifdef INIT_SETPROCTITLE_REPLACEMENT
+    //将argv与环境变量的位置分离开，分别copy到新的位置
     spt_init(argc, argv);
 #endif
     setlocale(LC_COLLATE,"");
@@ -4049,6 +4050,7 @@ int main(int argc, char **argv) {
     getRandomHexChars(hashseed,sizeof(hashseed));
     dictSetHashFunctionSeed((uint8_t*)hashseed);
     server.sentinel_mode = checkForSentinelMode(argc,argv);
+    //初始化配置
     initServerConfig();
     moduleInitModulesSystem();
 
