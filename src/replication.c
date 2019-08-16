@@ -1015,6 +1015,7 @@ void changeReplicationId(void) {
  * example, after a full resynchronization, when we start a new replication
  * history. */
 void clearReplicationId2(void) {
+    //replid2数组全部填充0
     memset(server.replid2,'0',sizeof(server.replid));
     server.replid2[CONFIG_RUN_ID_SIZE] = '\0';
     server.second_replid_offset = -1;

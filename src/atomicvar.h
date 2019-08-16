@@ -79,6 +79,7 @@
 #define atomicGet(var,dstvar) do { \
     dstvar = __atomic_load_n(&var,__ATOMIC_RELAXED); \
 } while(0)
+    //__atomic_store_n gcc内建函數 进行原子操作
 #define atomicSet(var,value) __atomic_store_n(&var,value,__ATOMIC_RELAXED)
 #define REDIS_ATOMIC_API "atomic-builtin"
 

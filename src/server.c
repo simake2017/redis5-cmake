@@ -1051,12 +1051,15 @@ void databasesCron(void) {
     }
 }
 
-/* We take a cached value of the unix time in the global state because with
+/*
+ * 记录时间
+ * We take a cached value of the unix time in the global state because with
  * virtual memory and aging there is to store the current time in objects at
  * every object access, and accuracy is not needed. To access a global var is
  * a lot faster than calling time(NULL) */
 void updateCachedTime(void) {
     time_t unixtime = time(NULL);
+    //原子操作
     atomicSet(server.unixtime,unixtime);
     server.mstime = mstime();
 
@@ -1518,23 +1521,27 @@ void createSharedObjects(void) {
 
 void initServerConfig(void) {
     int j;
-
+    //创建互斥锁的
     pthread_mutex_init(&server.next_client_id_mutex,NULL);
     pthread_mutex_init(&server.lruclock_mutex,NULL);
     pthread_mutex_init(&server.unixtime_mutex,NULL);
 
+    //记录时间
     updateCachedTime();
     getRandomHexChars(server.runid,CONFIG_RUN_ID_SIZE);
+    //追加字符串结尾标记
     server.runid[CONFIG_RUN_ID_SIZE] = '\0';
     changeReplicationId();
     clearReplicationId2();
     server.timezone = getTimeZone(); /* Initialized by tzset(). */
     server.configfile = NULL;
     server.executable = NULL;
+    //定时任务每次执行时间 单位s
     server.hz = server.config_hz = CONFIG_DEFAULT_HZ;
     server.dynamic_hz = CONFIG_DEFAULT_DYNAMIC_HZ;
     server.arch_bits = (sizeof(long) == 8) ? 64 : 32;
     server.port = CONFIG_DEFAULT_SERVER_PORT;
+    //默认511
     server.tcp_backlog = CONFIG_DEFAULT_TCP_BACKLOG;
     server.bindaddr_count = 0;
     server.unixsocket = NULL;
@@ -1543,12 +1550,18 @@ void initServerConfig(void) {
     server.sofd = -1;
     server.protected_mode = CONFIG_DEFAULT_PROTECTED_MODE;
     server.dbnum = CONFIG_DEFAULT_DBNUM;
+    //日志级别 2
     server.verbosity = CONFIG_DEFAULT_VERBOSITY;
+    //客户端超时 默认无限
     server.maxidletime = CONFIG_DEFAULT_CLIENT_TIMEOUT;
+    //300
     server.tcpkeepalive = CONFIG_DEFAULT_TCP_KEEPALIVE;
     server.active_expire_enabled = 1;
+    //内存整理开关 默认0
     server.active_defrag_enabled = CONFIG_DEFAULT_ACTIVE_DEFRAG;
+    //默认100M下 不整理
     server.active_defrag_ignore_bytes = CONFIG_DEFAULT_DEFRAG_IGNORE_BYTES;
+    //默认碎片低于10% 不整理
     server.active_defrag_threshold_lower = CONFIG_DEFAULT_DEFRAG_THRESHOLD_LOWER;
     server.active_defrag_threshold_upper = CONFIG_DEFAULT_DEFRAG_THRESHOLD_UPPER;
     server.active_defrag_cycle_min = CONFIG_DEFAULT_DEFRAG_CYCLE_MIN;
@@ -1560,8 +1573,10 @@ void initServerConfig(void) {
     server.loading = 0;
     server.logfile = zstrdup(CONFIG_DEFAULT_LOGFILE);
     server.syslog_enabled = CONFIG_DEFAULT_SYSLOG_ENABLED;
+    //系统日志标志
     server.syslog_ident = zstrdup(CONFIG_DEFAULT_SYSLOG_IDENT);
     server.syslog_facility = LOG_LOCAL0;
+    //守护进程
     server.daemonize = CONFIG_DEFAULT_DAEMONIZE;
     server.supervised = 0;
     server.supervised_mode = SUPERVISED_NONE;
@@ -1585,7 +1600,9 @@ void initServerConfig(void) {
     server.aof_load_truncated = CONFIG_DEFAULT_AOF_LOAD_TRUNCATED;
     server.aof_use_rdb_preamble = CONFIG_DEFAULT_AOF_USE_RDB_PREAMBLE;
     server.pidfile = NULL;
+    //rdb文件名 dump.rdb
     server.rdb_filename = zstrdup(CONFIG_DEFAULT_RDB_FILENAME);
+    //aof文件名 appendonly.aof
     server.aof_filename = zstrdup(CONFIG_DEFAULT_AOF_FILENAME);
     server.requirepass = NULL;
     server.rdb_compression = CONFIG_DEFAULT_RDB_COMPRESSION;

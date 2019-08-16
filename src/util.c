@@ -556,7 +556,9 @@ int ld2string(char *buf, size_t len, long double value, int humanfriendly) {
     return l;
 }
 
-/* Get random bytes, attempts to get an initial seed from /dev/urandom and
+/*
+ * 生成一个指定长度随机数组 todo
+ * Get random bytes, attempts to get an initial seed from /dev/urandom and
  * the uses a one way hash function in counter mode to generate a random
  * stream. However if /dev/urandom is not available, a weaker seed is used.
  *

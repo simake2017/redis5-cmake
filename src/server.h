@@ -935,9 +935,11 @@ struct redisServer {
     char *executable;           /* Absolute executable file path. */
     char **exec_argv;           /* Executable argv vector (copy). */
     int dynamic_hz;             /* Change hz value depending on # of clients. */
+    //定时器中断频率配置 单位秒
     int config_hz;              /* Configured HZ value. May be different than
                                    the actual 'hz' field value if dynamic-hz
                                    is enabled. */
+    //定时任务频率
     int hz;                     /* serverCron() calls frequency in hertz */
     redisDb *db;
     dict *commands;             /* Command table */
@@ -951,6 +953,7 @@ struct redisServer {
     char *pidfile;              /* PID file path */
     int arch_bits;              /* 32 or 64 depending on sizeof(long) */
     int cronloops;              /* Number of times the cron function run */
+    //随机生成的hex，+1为了给放置结尾标记\0
     char runid[CONFIG_RUN_ID_SIZE+1];  /* ID always different at every exec. */
     //是否哨兵模式
     int sentinel_mode;          /* True if this instance is a Sentinel. */
@@ -964,6 +967,7 @@ struct redisServer {
     int module_blocked_pipe[2]; /* Pipe used to awake the event loop if a
                                    client blocked on a module command needs
                                    to be processed. */
+    //默认端口 6379
     /* Networking */
     int port;                   /* TCP listening port */
     int tcp_backlog;            /* TCP listen() backlog */
@@ -1042,8 +1046,10 @@ struct redisServer {
     /* Configuration */
     int verbosity;                  /* Loglevel in redis.conf */
     int maxidletime;                /* Client timeout in seconds */
-    int tcpkeepalive;               /* Set SO_KEEPALIVE if non-zero. */
+    int tcpkeepalive;
+    //过期开关
     int active_expire_enabled;      /* Can be disabled for testing purposes. */
+    //碎片整理
     int active_defrag_enabled;
     size_t active_defrag_ignore_bytes; /* minimum amount of fragmentation waste to start active defrag */
     int active_defrag_threshold_lower; /* minimum percentage of fragmentation to start active defrag */
@@ -1055,6 +1061,7 @@ struct redisServer {
     int dbnum;                      /* Total number of configured DBs */
     int supervised;                 /* 1 if supervised, 0 otherwise. */
     int supervised_mode;            /* See SUPERVISED_* */
+    //是否守护进程
     int daemonize;                  /* True if running as a daemon */
     clientBufferLimitsConfig client_obuf_limits[CLIENT_TYPE_OBUF_COUNT];
     /* AOF persistence */
