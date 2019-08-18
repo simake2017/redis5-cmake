@@ -521,6 +521,7 @@ uint64_t dictSdsHash(const void *key) {
     return dictGenHashFunction((unsigned char*)key, sdslen((char*)key));
 }
 
+//获取key的hash
 uint64_t dictSdsCaseHash(const void *key) {
     return dictGenCaseHashFunction((unsigned char*)key, sdslen((char*)key));
 }
@@ -638,6 +639,7 @@ dictType keyptrDictType = {
     NULL                        /* val destructor */
 };
 
+//命令表字典结构
 /* Command table. sds string -> command struct pointer. */
 dictType commandTableDictType = {
     dictSdsCaseHash,            /* hash function */
@@ -1655,6 +1657,7 @@ void initServerConfig(void) {
     atomicSet(server.lruclock,lruclock);
     resetServerSaveParams();
 
+    //保存频率
     appendServerSaveParams(60*60,1);  /* save after 1 hour and 1 change */
     appendServerSaveParams(300,100);  /* save after 5 minutes and 100 changes */
     appendServerSaveParams(60,10000); /* save after 1 minute and 10000 changes */
@@ -1666,7 +1669,9 @@ void initServerConfig(void) {
     server.master = NULL;
     server.cached_master = NULL;
     server.master_initial_offset = -1;
+    //slave状态
     server.repl_state = REPL_STATE_NONE;
+    //slave同步超时时间
     server.repl_syncio_timeout = CONFIG_REPL_SYNCIO_TIMEOUT;
     server.repl_serve_stale_data = CONFIG_DEFAULT_SLAVE_SERVE_STALE_DATA;
     server.repl_slave_ro = CONFIG_DEFAULT_SLAVE_READ_ONLY;

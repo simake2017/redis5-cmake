@@ -56,11 +56,14 @@ typedef struct dictEntry {
 } dictEntry;
 
 typedef struct dictType {
+    //获取key的hash
     uint64_t (*hashFunction)(const void *key);
     void *(*keyDup)(void *privdata, const void *key);
     void *(*valDup)(void *privdata, const void *obj);
     int (*keyCompare)(void *privdata, const void *key1, const void *key2);
+    //key析构函数
     void (*keyDestructor)(void *privdata, void *key);
+    //val析构函数
     void (*valDestructor)(void *privdata, void *obj);
 } dictType;
 
