@@ -33,6 +33,9 @@
 #include "bio.h"
 #include "latency.h"
 #include "atomicvar.h"
+#include "../../../Users/senki/.CLion2019.2/system/.remote/localhost_22/b003c794-b611-4bef-b704-b8feb77fd8c2/usr/include/bits/time.h"
+#include "../../../Users/senki/.CLion2019.2/system/.remote/localhost_22/b003c794-b611-4bef-b704-b8feb77fd8c2/usr/include/time.h"
+#include "../../../Users/senki/.CLion2019.2/system/.remote/localhost_22/b003c794-b611-4bef-b704-b8feb77fd8c2/usr/include/stdlib.h"
 
 #include <time.h>
 #include <signal.h>
@@ -72,6 +75,7 @@ double R_Zero, R_PosInf, R_NegInf, R_Nan;
 struct redisServer server; /* Server global state */
 volatile unsigned long lru_clock; /* Server global current LRU time. */
 
+//redis命令字典表
 /* Our command table.
  *
  * Every entry is composed of the following fields:
@@ -1521,6 +1525,7 @@ void createSharedObjects(void) {
     shared.maxstring = sdsnew("maxstring");
 }
 
+//初始化配置
 void initServerConfig(void) {
     int j;
     //创建互斥锁的
@@ -3715,7 +3720,8 @@ void linuxMemoryWarnings(void) {
 void createPidFile(void) {
     /* If pidfile requested, but no pidfile defined, use
      * default pidfile path */
-    if (!server.pidfile) server.pidfile = zstrdup(CONFIG_DEFAULT_PID_FILE);
+    if (!server.pidfile)
+        server.pidfile = zstrdup(CONFIG_DEFAULT_PID_FILE);//  /var/run/redis.pid
 
     /* Try to write the pid file in a best-effort way. */
     FILE *fp = fopen(server.pidfile,"w");
@@ -4074,11 +4080,12 @@ int main(int argc, char **argv) {
     server.sentinel_mode = checkForSentinelMode(argc,argv);
     //初始化配置
     initServerConfig();
+    //redis module初始化
     moduleInitModulesSystem();
 
     /* Store the executable path and arguments in a safe place in order
      * to be able to restart the server later. */
-    server.executable = getAbsolutePath(argv[0]);
+    server.executable = getAbsolutePath(argv[0]);//获取启动的绝对路径
     server.exec_argv = zmalloc(sizeof(char*)*(argc+1));
     server.exec_argv[argc] = NULL;
     for (j = 0; j < argc; j++) server.exec_argv[j] = zstrdup(argv[j]);
@@ -4086,7 +4093,7 @@ int main(int argc, char **argv) {
     /* We need to init sentinel right now as parsing the configuration file
      * in sentinel mode will have the effect of populating the sentinel
      * data structures with master nodes to monitor. */
-    if (server.sentinel_mode) {
+    if (server.sentinel_mode) {//哨兵模式
         initSentinelConfig();
         initSentinel();
     }
@@ -4106,7 +4113,8 @@ int main(int argc, char **argv) {
 
         /* Handle special options --help and --version */
         if (strcmp(argv[1], "-v") == 0 ||
-            strcmp(argv[1], "--version") == 0) version();
+            strcmp(argv[1], "--version") == 0)
+            version();
         if (strcmp(argv[1], "--help") == 0 ||
             strcmp(argv[1], "-h") == 0) usage();
         if (strcmp(argv[1], "--test-memory") == 0) {
@@ -4123,7 +4131,7 @@ int main(int argc, char **argv) {
         /* First argument is the config file name? */
         if (argv[j][0] != '-' || argv[j][1] != '-') {
             configfile = argv[j];
-            server.configfile = getAbsolutePath(configfile);
+            server.configfile = getAbsolutePath(configfile);//配置文件
             /* Replace the config file in server.exec_argv with
              * its absolute path. */
             zfree(server.exec_argv[j]);
@@ -4161,7 +4169,7 @@ int main(int argc, char **argv) {
             exit(1);
         }
         resetServerSaveParams();
-        loadServerConfig(configfile,options);
+        loadServerConfig(configfile,options);//加载配置
         sdsfree(options);
     }
 
@@ -4180,12 +4188,14 @@ int main(int argc, char **argv) {
         serverLog(LL_WARNING, "Configuration loaded");
     }
 
-    server.supervised = redisIsSupervised(server.supervised_mode);
+    server.supervised = redisIsSupervised(server.supervised_mode);//守护进程
     int background = server.daemonize && !server.supervised;
-    if (background) daemonize();
+    if (background)
+        daemonize(); //后台运行
 
     initServer();
-    if (background || server.pidfile) createPidFile();
+    if (background || server.pidfile)
+        createPidFile();//记录pid 默认位置 /var/run/redis.pid
     redisSetProcTitle(argv[0]);
     redisAsciiArt();
     checkTcpBacklogSettings();

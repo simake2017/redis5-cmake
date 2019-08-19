@@ -229,6 +229,7 @@ typedef struct sentinelRedisInstance {
     sds info; /* cached INFO output */
 } sentinelRedisInstance;
 
+//哨兵模式状态
 /* Main state. */
 struct sentinelState {
     char myid[CONFIG_RUN_ID_SIZE+1]; /* This sentinel ID. */
@@ -441,6 +442,7 @@ void sentinelSetCommand(client *c);
 void sentinelPublishCommand(client *c);
 void sentinelRoleCommand(client *c);
 
+//哨兵模式使用的redis命令
 struct redisCommand sentinelcmds[] = {
     {"ping",pingCommand,1,"",0,NULL,0,0,0,0,0},
     {"sentinel",sentinelCommand,-2,"",0,NULL,0,0,0,0,0},
@@ -469,7 +471,7 @@ void initSentinel(void) {
 
     /* Remove usual Redis commands from the command table, then just add
      * the SENTINEL command. */
-    dictEmpty(server.commands,NULL);
+    dictEmpty(server.commands,NULL);//清空commandtable中的命令
     for (j = 0; j < sizeof(sentinelcmds)/sizeof(sentinelcmds[0]); j++) {
         int retval;
         struct redisCommand *cmd = sentinelcmds+j;
