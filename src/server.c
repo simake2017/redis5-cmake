@@ -2037,10 +2037,10 @@ void resetServerStats(void) {
 
 void initServer(void) {
     int j;
-
+    //SIG_IGN忽略信号
     signal(SIGHUP, SIG_IGN);
     signal(SIGPIPE, SIG_IGN);
-    setupSignalHandlers();
+    setupSignalHandlers();//信号处理
 
     if (server.syslog_enabled) {
         openlog(server.syslog_ident, LOG_PID | LOG_NDELAY | LOG_NOWAIT,
@@ -2064,8 +2064,8 @@ void initServer(void) {
     server.clients_paused = 0;
     server.system_memory_size = zmalloc_get_memory_size();
 
-    createSharedObjects();
-    adjustOpenFilesLimit();
+    createSharedObjects();//共享的一些对象
+    adjustOpenFilesLimit();//自适应file limit
     server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);
     if (server.el == NULL) {
         serverLog(LL_WARNING,
@@ -3808,6 +3808,7 @@ void redisAsciiArt(void) {
     zfree(buf);
 }
 
+//响应关机信号
 static void sigShutdownHandler(int sig) {
     char *msg;
 
@@ -3846,8 +3847,8 @@ void setupSignalHandlers(void) {
      * Otherwise, sa_handler is used. */
     sigemptyset(&act.sa_mask);
     act.sa_flags = 0;
-    act.sa_handler = sigShutdownHandler;
-    sigaction(SIGTERM, &act, NULL);
+    act.sa_handler = sigShutdownHandler;//新的信号处理函数
+    sigaction(SIGTERM, &act, NULL);//终止信号处理
     sigaction(SIGINT, &act, NULL);
 
 #ifdef HAVE_BACKTRACE
@@ -4102,6 +4103,7 @@ int main(int argc, char **argv) {
     else if (strstr(argv[0],"redis-check-aof") != NULL)
         redis_check_aof_main(argc,argv);
 
+    //解析参数
     if (argc >= 2) {
         j = 1; /* First option to parse in argv[] */
         sds options = sdsempty();

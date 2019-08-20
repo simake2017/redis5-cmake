@@ -60,6 +60,7 @@
     #endif
 #endif
 
+//创建事件处理器
 aeEventLoop *aeCreateEventLoop(int setsize) {
     aeEventLoop *eventLoop;
     int i;
