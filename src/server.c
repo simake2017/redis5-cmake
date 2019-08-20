@@ -33,10 +33,6 @@
 #include "bio.h"
 #include "latency.h"
 #include "atomicvar.h"
-#include "../../../Users/senki/.CLion2019.2/system/.remote/localhost_22/b003c794-b611-4bef-b704-b8feb77fd8c2/usr/include/bits/time.h"
-#include "../../../Users/senki/.CLion2019.2/system/.remote/localhost_22/b003c794-b611-4bef-b704-b8feb77fd8c2/usr/include/time.h"
-#include "../../../Users/senki/.CLion2019.2/system/.remote/localhost_22/b003c794-b611-4bef-b704-b8feb77fd8c2/usr/include/stdlib.h"
-
 #include <time.h>
 #include <signal.h>
 #include <sys/wait.h>
