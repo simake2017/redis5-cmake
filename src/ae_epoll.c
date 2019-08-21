@@ -32,6 +32,7 @@
 #include <sys/epoll.h>
 
 typedef struct aeApiState {
+    //epool专用文件句柄
     int epfd;
     struct epoll_event *events;
 } aeApiState;

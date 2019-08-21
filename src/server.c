@@ -2064,9 +2064,9 @@ void initServer(void) {
     server.clients_paused = 0;
     server.system_memory_size = zmalloc_get_memory_size();
 
-    createSharedObjects();//共享的一些对象
+    createSharedObjects();//共享的一些对象,放到了shared结构中
     adjustOpenFilesLimit();//自适应file limit
-    server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);
+    server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);//创建event loop
     if (server.el == NULL) {
         serverLog(LL_WARNING,
             "Failed creating the event loop. Error message: '%s'",
