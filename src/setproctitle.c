@@ -54,6 +54,7 @@
 extern char **environ;
 
 static struct {
+    //进程原始名称
 	/* original value */
 	const char *arg0;
 
@@ -161,9 +162,9 @@ static int spt_copyargs(int argc, char *argv[]) {
 //修改进程名称,
 //argv 后边紧接着是environ
 void spt_init(int argc, char *argv[]) {
-        char **envp = environ;
-        //base:指向argv[0]指向的字符串的初始位置
-        //end：指向环境变量的结尾处
+    char **envp = environ;
+    //base:指向argv[0]指向的字符串的初始位置
+    //end：指向环境变量的结尾处
 	char *base, *end, *nul, *tmp;
 	int i, error;
 
@@ -172,10 +173,10 @@ void spt_init(int argc, char *argv[]) {
 
 	//进程名字符串(argv[0]指向的字符串)的结束位置(包括\0)
 	nul = &base[strlen(base)];
-	end = nul + 1;//+1指向environ第一个字符位置
+	end = nul + 1;//+1指向environ第一个字符串位置
 
 	//超过argc数量i后,argv[i]为null
-	//找到最后一个argv的位置
+	//找到最后一个argv的位置，即使第一个环境变量字符串位置
 	for (i = 0; i < argc || (i >= argc && argv[i]); i++) {
 		if (!argv[i] || argv[i] < end)
 			continue;
