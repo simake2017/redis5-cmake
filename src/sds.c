@@ -41,7 +41,8 @@
 
 const char *SDS_NOINIT = "SDS_NOINIT";
 //获取sds使用的存储类型大小
-//static inline 声明内连函数仅在当前文件中可用
+//static inline的内联函数，一般情况下不会产生函数本身的代码，而是全部被嵌入在被调用的地方。如果不加static，
+//则表示该函数有可能会被其他编译单元所调用，所以一定会产生函数本身的代码。所以加了static，一般可令可执行文件变小
 static inline int sdsHdrSize(char type) {
     //SDS_TYPE_MASK=7 000111,如果n<=7则n&7=n
     switch(type&SDS_TYPE_MASK) {
