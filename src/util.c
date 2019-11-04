@@ -564,6 +564,7 @@ int ld2string(char *buf, size_t len, long double value, int humanfriendly) {
  *
  * This function is not thread safe, since the state is global. */
 void getRandomBytes(unsigned char *p, size_t len) {
+    //static变量 值会保存起来
     /* Global state. */
     static int seed_initialized = 0;
     static unsigned char seed[20]; /* The SHA1 seed, from /dev/urandom. */

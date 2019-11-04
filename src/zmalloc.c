@@ -222,6 +222,8 @@ size_t zmalloc_used_memory(void) {
     return um;
 }
 
+//指针函数本质是一个函数，其返回值为指针  int* fun(int x,int y)
+//函数指针本质是一个指针，其指向一个函数  int (*fun)(int x,int y)
 void zmalloc_set_oom_handler(void (*oom_handler)(size_t)) {
     zmalloc_oom_handler = oom_handler;
 }

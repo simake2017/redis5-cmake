@@ -422,6 +422,7 @@ err:
     if (!log_to_stdout) close(fd);
 }
 
+//微妙
 /* Return the UNIX time in microseconds */
 long long ustime(void) {
     struct timeval tv;
@@ -433,6 +434,7 @@ long long ustime(void) {
     return ust;
 }
 
+//毫秒
 /* Return the UNIX time in milliseconds */
 mstime_t mstime(void) {
     return ustime()/1000;
@@ -1063,6 +1065,7 @@ void updateCachedTime(void) {
     time_t unixtime = time(NULL);
     //原子操作
     atomicSet(server.unixtime,unixtime);
+    //毫秒
     server.mstime = mstime();
 
     /* To get information about daylight saving time, we need to call localtime_r
@@ -1070,7 +1073,9 @@ void updateCachedTime(void) {
      * since we will never fork() while here, in the main thread. The logging
      * function will call a thread safe version of localtime that has no locks. */
     struct tm tm;
+    //解析时间
     localtime_r(&server.unixtime,&tm);
+    //夏令时标识符，实行夏令时的时候，tm_isdst为正。不实行夏令时的进候，tm_isdst为0；不了解情况时，tm_isdst()为负。
     server.daylight_active = tm.tm_isdst;
 }
 
@@ -1524,12 +1529,12 @@ void createSharedObjects(void) {
 //初始化配置
 void initServerConfig(void) {
     int j;
-    //创建互斥锁的
+    //初始化互斥锁
     pthread_mutex_init(&server.next_client_id_mutex,NULL);
     pthread_mutex_init(&server.lruclock_mutex,NULL);
     pthread_mutex_init(&server.unixtime_mutex,NULL);
 
-    //记录时间
+    //记录访问时间
     updateCachedTime();
     getRandomHexChars(server.runid,CONFIG_RUN_ID_SIZE);
     //追加字符串结尾标记
@@ -1555,7 +1560,7 @@ void initServerConfig(void) {
     server.dbnum = CONFIG_DEFAULT_DBNUM;
     //日志级别 2
     server.verbosity = CONFIG_DEFAULT_VERBOSITY;
-    //客户端超时 默认无限
+    //客户端超时时间 默认不会超时
     server.maxidletime = CONFIG_DEFAULT_CLIENT_TIMEOUT;
     //300
     server.tcpkeepalive = CONFIG_DEFAULT_TCP_KEEPALIVE;
@@ -1570,14 +1575,18 @@ void initServerConfig(void) {
     server.active_defrag_cycle_min = CONFIG_DEFAULT_DEFRAG_CYCLE_MIN;
     server.active_defrag_cycle_max = CONFIG_DEFAULT_DEFRAG_CYCLE_MAX;
     server.active_defrag_max_scan_fields = CONFIG_DEFAULT_DEFRAG_MAX_SCAN_FIELDS;
+    //批量请求的大小限制
     server.proto_max_bulk_len = CONFIG_DEFAULT_PROTO_MAX_BULK_LEN;
+    //客户端查询缓存大小限制
     server.client_max_querybuf_len = PROTO_MAX_QUERYBUF_LEN;
     server.saveparams = NULL;
     server.loading = 0;
     server.logfile = zstrdup(CONFIG_DEFAULT_LOGFILE);
+    //启用写入日志到system logger facility
     server.syslog_enabled = CONFIG_DEFAULT_SYSLOG_ENABLED;
     //系统日志标志
     server.syslog_ident = zstrdup(CONFIG_DEFAULT_SYSLOG_IDENT);
+    //日志设备
     server.syslog_facility = LOG_LOCAL0;
     //守护进程
     server.daemonize = CONFIG_DEFAULT_DAEMONIZE;
@@ -3865,6 +3874,7 @@ void setupSignalHandlers(void) {
 
 void memtest(size_t megabytes, int passes);
 
+//判断是否哨兵模式
 /* Returns 1 if there is --sentinel among the arguments or if
  * argv[0] contains "redis-sentinel". */
 int checkForSentinelMode(int argc, char **argv) {
@@ -4031,6 +4041,7 @@ int redisIsSupervised(int mode) {
 
 
 int main(int argc, char **argv) {
+    //保存当前时间
     struct timeval tv;
     int j;
 
@@ -4065,15 +4076,22 @@ int main(int argc, char **argv) {
     //将argv与环境变量的位置分离开，分别copy到新的位置
     spt_init(argc, argv);
 #endif
+    //设置区域
     setlocale(LC_COLLATE,"");
+    //设置时区
     tzset(); /* Populates 'timezone' global. */
     zmalloc_set_oom_handler(redisOutOfMemoryHandler);
+    //time返回秒数
+    //srand初始化随机种子
     srand(time(NULL)^getpid());
+    //把目前的时间用tv 结构体返回，当地时区的信息则放到tz所指的结构中
     gettimeofday(&tv,NULL);
 
     char hashseed[16];
+    //获取随机种子
     getRandomHexChars(hashseed,sizeof(hashseed));
     dictSetHashFunctionSeed((uint8_t*)hashseed);
+    //判断是否哨兵模式
     server.sentinel_mode = checkForSentinelMode(argc,argv);
     //初始化配置
     initServerConfig();
