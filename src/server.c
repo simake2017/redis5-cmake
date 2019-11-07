@@ -1595,6 +1595,7 @@ void initServerConfig(void) {
     server.aof_state = AOF_OFF;
     server.aof_fsync = CONFIG_DEFAULT_AOF_FSYNC;
     server.aof_no_fsync_on_rewrite = CONFIG_DEFAULT_AOF_NO_FSYNC_ON_REWRITE;
+    //aof增长大于xM则重写
     server.aof_rewrite_perc = AOF_REWRITE_PERC;
     server.aof_rewrite_min_size = AOF_REWRITE_MIN_SIZE;
     server.aof_rewrite_base_size = 0;
