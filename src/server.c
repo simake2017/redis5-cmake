@@ -1710,6 +1710,9 @@ void initServerConfig(void) {
     server.repl_backlog_time_limit = CONFIG_DEFAULT_REPL_BACKLOG_TIME_LIMIT;
     server.repl_no_slaves_since = time(NULL);
 
+    //在redis给client发送数据的过程中，会根据该参数判断发送的数据量是否过大，如果满足如下条件，redis会关闭并释放链接。
+    //1）hard_limit_bytes不为0，且发送的数据大于hard_limit_bytes。
+    //2） soft_limit_bytes不为0，且发送的数据量大于soft_limit_bytes，同时，持续时间超过soft_limit_seconds。
     /* Client output buffer limits */
     for (j = 0; j < CLIENT_TYPE_OBUF_COUNT; j++)
         server.client_obuf_limits[j] = clientBufferLimitsDefaults[j];
@@ -1725,6 +1728,7 @@ void initServerConfig(void) {
      * redis.conf using the rename-command directive. */
     server.commands = dictCreate(&commandTableDictType,NULL);
     server.orig_commands = dictCreate(&commandTableDictType,NULL);
+    //填充命令字典表
     populateCommandTable();
     server.delCommand = lookupCommandByCString("del");
     server.multiCommand = lookupCommandByCString("multi");
@@ -1741,7 +1745,9 @@ void initServerConfig(void) {
     server.xgroupCommand = lookupCommandByCString("xgroup");
 
     /* Slow log */
+    //慢查询阀值
     server.slowlog_log_slower_than = CONFIG_DEFAULT_SLOWLOG_LOG_SLOWER_THAN;
+    //慢查询日志保存多少个
     server.slowlog_max_len = CONFIG_DEFAULT_SLOWLOG_MAX_LEN;
 
     /* Latency monitor */
@@ -2216,10 +2222,12 @@ void initServer(void) {
     server.initial_memory_usage = zmalloc_used_memory();
 }
 
+//根据硬编码的命令填充命令字典表
 /* Populates the Redis Command Table starting from the hard coded list
  * we have on top of redis.c file. */
 void populateCommandTable(void) {
     int j;
+    //命令数量
     int numcommands = sizeof(redisCommandTable)/sizeof(struct redisCommand);
 
     for (j = 0; j < numcommands; j++) {
@@ -2247,6 +2255,7 @@ void populateCommandTable(void) {
             f++;
         }
 
+        //保存到字典中
         retval1 = dictAdd(server.commands, sdsnew(c->name), c);
         /* Populate an additional dictionary that will be unaffected
          * by rename-command statements in redis.conf. */
@@ -2313,6 +2322,7 @@ struct redisCommand *lookupCommand(sds name) {
     return dictFetchValue(server.commands, name);
 }
 
+//根据命令名称查找命令
 struct redisCommand *lookupCommandByCString(char *s) {
     struct redisCommand *cmd;
     sds name = sdsnew(s);
@@ -4104,6 +4114,7 @@ int main(int argc, char **argv) {
     server.executable = getAbsolutePath(argv[0]);//获取启动的绝对路径
     server.exec_argv = zmalloc(sizeof(char*)*(argc+1));
     server.exec_argv[argc] = NULL;
+    //参数copy
     for (j = 0; j < argc; j++) server.exec_argv[j] = zstrdup(argv[j]);
 
     /* We need to init sentinel right now as parsing the configuration file
@@ -4125,6 +4136,7 @@ int main(int argc, char **argv) {
     //解析参数
     if (argc >= 2) {
         j = 1; /* First option to parse in argv[] */
+        //输入的参数
         sds options = sdsempty();
         char *configfile = NULL;
 
@@ -4185,8 +4197,10 @@ int main(int argc, char **argv) {
                 "Sentinel needs config file on disk to save state.  Exiting...");
             exit(1);
         }
+        //重置rdb的保存条件
         resetServerSaveParams();
-        loadServerConfig(configfile,options);//加载配置
+        //解析配置文件与命令行传入的参数
+        loadServerConfig(configfile,options);
         sdsfree(options);
     }
 

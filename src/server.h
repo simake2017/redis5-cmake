@@ -770,6 +770,7 @@ typedef struct client {
     char buf[PROTO_REPLY_CHUNK_BYTES];
 } client;
 
+//rdb save参数模型
 struct saveparam {
     time_t seconds;
     int changes;
@@ -933,7 +934,9 @@ struct redisServer {
     pid_t pid;                  /* Main process pid. */
     //配置文件路径
     char *configfile;           /* Absolute config file path, or NULL */
+    //执行文件路径
     char *executable;           /* Absolute executable file path. */
+    //命令参数
     char **exec_argv;           /* Executable argv vector (copy). */
     int dynamic_hz;             /* Change hz value depending on # of clients. */
     //定时器中断频率配置 单位秒
@@ -943,7 +946,9 @@ struct redisServer {
     //定时任务频率
     int hz;                     /* serverCron() calls frequency in hertz */
     redisDb *db;
+    //命令字典表  cmdname->cmd
     dict *commands;             /* Command table */
+    //命令字典表  cmdname->cmd，命令重命名不影响这部分
     dict *orig_commands;        /* Command table before command renaming. */
     //事件处理器
     aeEventLoop *el;
@@ -986,6 +991,7 @@ struct redisServer {
     int sofd;                   /* Unix socket file descriptor */
     int cfd[CONFIG_BINDADDR_MAX];/* Cluster bus listening socket */
     int cfd_count;              /* Used slots in cfd[] */
+    //client链表
     list *clients;              /* List of active clients */
     list *clients_to_close;     /* Clients to close asynchronously */
     list *clients_pending_write; /* There is to write or install handler. */
@@ -1035,7 +1041,9 @@ struct redisServer {
     long long stat_sync_partial_err;/* Number of unaccepted PSYNC requests. */
     list *slowlog;                  /* SLOWLOG list of commands */
     long long slowlog_entry_id;     /* SLOWLOG current entry ID */
+    //慢查询阀值
     long long slowlog_log_slower_than; /* SLOWLOG time limit (to get logged) */
+    //慢查询日志最大保存多少个
     unsigned long slowlog_max_len;     /* SLOWLOG max number of items logged */
     struct malloc_stats cron_malloc_stats; /* sampled in serverCron(). */
     long long stat_net_input_bytes; /* Bytes read from network. */
@@ -1076,6 +1084,7 @@ struct redisServer {
     int supervised_mode;            /* See SUPERVISED_* */
     //是否守护进程
     int daemonize;                  /* True if running as a daemon */
+    //在redis给client发送数据的过程中，会根据该参数判断发送的数据量是否过大
     clientBufferLimitsConfig client_obuf_limits[CLIENT_TYPE_OBUF_COUNT];
     /* AOF persistence */
     //aof状态
@@ -1125,6 +1134,7 @@ struct redisServer {
     long long dirty_before_bgsave;  /* Used to restore dirty on failed BGSAVE */
     pid_t rdb_child_pid;            /* PID of RDB saving child */
     struct saveparam *saveparams;   /* Save points array for RDB */
+    //rdb save的条件有几种
     int saveparamslen;              /* Number of saving points */
     char *rdb_filename;             /* Name of RDB file */
     int rdb_compression;            /* Use compression in RDB? */
@@ -1150,6 +1160,7 @@ struct redisServer {
     redisOpArray also_propagate;    /* Additional command to propagate. */
     /* Logging */
     char *logfile;                  /* Path of log file */
+    //系统日志开关
     int syslog_enabled;             /* Is syslog enabled? */
     char *syslog_ident;             /* Syslog ident */
     int syslog_facility;            /* Syslog facility */
@@ -1301,6 +1312,7 @@ struct redisServer {
     int lazyfree_lazy_expire;
     int lazyfree_lazy_server_del;
     /* Latency monitor */
+    //延迟监控触发阀值
     long long latency_monitor_threshold;
     dict *latency_events;
     /* Assert & bug reporting */
@@ -1328,10 +1340,15 @@ typedef struct pubsubPattern {
 typedef void redisCommandProc(client *c);
 typedef int *redisGetKeysProc(struct redisCommand *cmd, robj **argv, int argc, int *numkeys);
 struct redisCommand {
+    //命令名称
     char *name;
+    //指向处理命令的函数
     redisCommandProc *proc;
+    //参数数量  如果是-N 则参数数量>=N
     int arity;
+    //标识的字符串表示
     char *sflags; /* Flags as string representation, one char per flag. */
+    //标识
     int flags;    /* The actual flags, obtained from the 'sflags' field. */
     /* Use a function to determine keys arguments in a command line.
      * Used for Redis Cluster redirect. */

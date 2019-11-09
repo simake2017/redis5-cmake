@@ -858,6 +858,7 @@ void loadServerConfig(char *filename, char *options) {
         config = sdscat(config,"\n");
         config = sdscat(config,options);
     }
+    //将配置加载到server中
     loadServerConfigFromString(config);
     sdsfree(config);
 }
