@@ -635,12 +635,14 @@ typedef struct clientReplyBlock {
 /* Redis database representation. There are multiple databases identified
  * by integers from 0 (the default database) up to the max configured
  * database. The database number is the 'id' field in the structure. */
+//redis数据库结构
 typedef struct redisDb {
     dict *dict;                 /* The keyspace for this DB */
     dict *expires;              /* Timeout of keys with a timeout set */
     dict *blocking_keys;        /* Keys with clients waiting for data (BLPOP)*/
     dict *ready_keys;           /* Blocked keys that received a PUSH */
     dict *watched_keys;         /* WATCHED keys for MULTI/EXEC CAS */
+    //从0开始 数据库编号
     int id;                     /* Database ID */
     long long avg_ttl;          /* Average TTL, just for stats */
     list *defrag_later;         /* List of key names to attempt to defrag one by one, gradually. */
@@ -714,6 +716,7 @@ typedef struct readyList {
 typedef struct client {
     uint64_t id;            /* Client incremental unique ID. */
     int fd;                 /* Client socket. */
+    //client选择的db
     redisDb *db;            /* Pointer to currently SELECTed DB. */
     robj *name;             /* As set by CLIENT SETNAME. */
     sds querybuf;           /* Buffer we use to accumulate client queries. */
@@ -945,6 +948,7 @@ struct redisServer {
                                    is enabled. */
     //定时任务频率
     int hz;                     /* serverCron() calls frequency in hertz */
+    //redis 数据库
     redisDb *db;
     //命令字典表  cmdname->cmd
     dict *commands;             /* Command table */
@@ -967,6 +971,7 @@ struct redisServer {
     char runid[CONFIG_RUN_ID_SIZE+1];  /* ID always different at every exec. */
     //是否哨兵模式
     int sentinel_mode;          /* True if this instance is a Sentinel. */
+    //初始化完成后使用了多少内存
     size_t initial_memory_usage; /* Bytes used after initialization. */
     int always_show_logo;       /* Show logo even for non-stdout logging. */
     /* Modules */
@@ -983,11 +988,15 @@ struct redisServer {
     int tcp_backlog;            /* TCP listen() backlog */
     //需要绑定的地址
     char *bindaddr[CONFIG_BINDADDR_MAX]; /* Addresses we should bind to */
+    //绑定地址数量
     int bindaddr_count;         /* Number of addresses in server.bindaddr[] */
     char *unixsocket;           /* UNIX socket path */
     mode_t unixsocketperm;      /* UNIX socket permission */
+    //监听的socket
     int ipfd[CONFIG_BINDADDR_MAX]; /* TCP socket file descriptors */
+    //监听的socket数量
     int ipfd_count;             /* Used slots in ipfd[] */
+    //unix socket
     int sofd;                   /* Unix socket file descriptor */
     int cfd[CONFIG_BINDADDR_MAX];/* Cluster bus listening socket */
     int cfd_count;              /* Used slots in cfd[] */
@@ -1006,9 +1015,12 @@ struct redisServer {
     //不接受外部连接,哨兵模式必须关闭0
     int protected_mode;         /* Don't accept external connections. */
     /* RDB / AOF loading information */
+    //是否正在加载pdb/aof
     int loading;                /* We are loading data from disk if true */
+    //加载的字节数
     off_t loading_total_bytes;
     off_t loading_loaded_bytes;
+    //加载开始时间
     time_t loading_start_time;
     off_t loading_process_events_interval_bytes;
     /* Fast pointers to often looked up command */
@@ -1039,7 +1051,9 @@ struct redisServer {
     long long stat_sync_full;       /* Number of full resyncs with slaves. */
     long long stat_sync_partial_ok; /* Number of accepted PSYNC requests. */
     long long stat_sync_partial_err;/* Number of unaccepted PSYNC requests. */
+    //慢查询日志
     list *slowlog;                  /* SLOWLOG list of commands */
+    //当前慢查询日志id
     long long slowlog_entry_id;     /* SLOWLOG current entry ID */
     //慢查询阀值
     long long slowlog_log_slower_than; /* SLOWLOG time limit (to get logged) */
@@ -1087,7 +1101,7 @@ struct redisServer {
     //在redis给client发送数据的过程中，会根据该参数判断发送的数据量是否过大
     clientBufferLimitsConfig client_obuf_limits[CLIENT_TYPE_OBUF_COUNT];
     /* AOF persistence */
-    //aof状态
+    //aof开关与状态
     int aof_state;                  /* AOF_(ON|OFF|WAIT_REWRITE) */
     //aof保存方式
     int aof_fsync;                  /* Kind of fsync() policy */
@@ -1102,8 +1116,11 @@ struct redisServer {
     off_t aof_fsync_offset;         /* AOF offset which is already synced to disk. */
     int aof_rewrite_scheduled;      /* Rewrite once BGSAVE terminates. */
     pid_t aof_child_pid;            /* PID if rewriting process */
+    //aof重写时记录变换的数据缓冲
     list *aof_rewrite_buf_blocks;   /* Hold changes during an AOF rewrite. */
+    //aof缓冲
     sds aof_buf;      /* AOF buffer, written before entering the event loop */
+    //aof文件描述符
     int aof_fd;       /* File descriptor of currently selected AOF file */
     int aof_selected_db; /* Currently selected DB in AOF */
     time_t aof_flush_postponed_start; /* UNIX time of postponed AOF flush */
@@ -1130,6 +1147,7 @@ struct redisServer {
                                       to child process. */
     sds aof_child_diff;             /* AOF diff accumulator child side. */
     /* RDB persistence */
+    //上次保存后db数据是否发生了变换
     long long dirty;                /* Changes to DB from the last save */
     long long dirty_before_bgsave;  /* Used to restore dirty on failed BGSAVE */
     pid_t rdb_child_pid;            /* PID of RDB saving child */
@@ -1139,7 +1157,9 @@ struct redisServer {
     char *rdb_filename;             /* Name of RDB file */
     int rdb_compression;            /* Use compression in RDB? */
     int rdb_checksum;               /* Use RDB checksum? */
+    //最新一次save成功时间
     time_t lastsave;                /* Unix time of last successful save */
+    //最新一次尝试bgsave时间
     time_t lastbgsave_try;          /* Unix time of last attempted bgsave */
     time_t rdb_save_time_last;      /* Time used by last RDB save run. */
     time_t rdb_save_time_start;     /* Current RDB save start time. */
@@ -1227,6 +1247,7 @@ struct redisServer {
     /* Limits */
     //客户端最大连接数默认10000
     unsigned int maxclients;            /* Max number of simultaneous clients */
+    //最大内存 32机器默认3GB
     unsigned long long maxmemory;   /* Max number of memory bytes to use */
     int maxmemory_policy;           /* Policy for key eviction */
     int maxmemory_samples;          /* Pricision of random sampling */
@@ -1271,6 +1292,7 @@ struct redisServer {
     int notify_keyspace_events; /* Events to propagate via Pub/Sub. This is an
                                    xor of NOTIFY_... flags. */
     /* Cluster */
+    //集群开关
     int cluster_enabled;      /* Is cluster enabled? */
     mstime_t cluster_node_timeout; /* Cluster node timeout. */
     char *cluster_configfile; /* Cluster auto-generated config file name. */
@@ -1322,6 +1344,7 @@ struct redisServer {
     int bug_report_start; /* True if bug report header was already logged. */
     int watchdog_period;  /* Software watchdog period in ms. 0 = off */
     /* System hardware info */
+    //物理内存总page数
     size_t system_memory_size;  /* Total memory in system as reported by OS */
 
     //互斥锁

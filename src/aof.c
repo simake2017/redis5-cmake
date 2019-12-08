@@ -729,9 +729,11 @@ int loadAppendOnlyFile(char *filename) {
 
     /* Check if this AOF file has an RDB preamble. In that case we need to
      * load the RDB file and later continue loading the AOF tail. */
+    //是否是rdb与aof混合文件
     char sig[5]; /* "REDIS" */
     if (fread(sig,1,5,fp) != 5 || memcmp(sig,"REDIS",5) != 0) {
         /* No RDB preamble, seek back at 0 offset. */
+        // 文件偏移设置为0
         if (fseek(fp,0,SEEK_SET) == -1) goto readerr;
     } else {
         /* RDB preamble. Pass loading the RDB functions. */

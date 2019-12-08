@@ -31,9 +31,11 @@
 
 #include <sys/epoll.h>
 
+//保存epoll信息
 typedef struct aeApiState {
-    //epool专用文件句柄
+    //epoll专用文件句柄
     int epfd;
+    //epoll事件数组
     struct epoll_event *events;
 } aeApiState;
 
@@ -47,6 +49,7 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
         zfree(state);
         return -1;
     }
+    //创建一个epoll
     state->epfd = epoll_create(1024); /* 1024 is just a hint for the kernel */
     if (state->epfd == -1) {
         zfree(state->events);
@@ -82,9 +85,10 @@ static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
 
     ee.events = 0;
     mask |= eventLoop->events[fd].mask; /* Merge old events */
-    if (mask & AE_READABLE) ee.events |= EPOLLIN;
-    if (mask & AE_WRITABLE) ee.events |= EPOLLOUT;
-    ee.data.fd = fd;
+    if (mask & AE_READABLE) ee.events |= EPOLLIN; //读事件
+    if (mask & AE_WRITABLE) ee.events |= EPOLLOUT;//写事件
+    ee.data.fd = fd; //socket fd
+    //socket订阅epoll上指定事件
     if (epoll_ctl(state->epfd,op,fd,&ee) == -1) return -1;
     return 0;
 }

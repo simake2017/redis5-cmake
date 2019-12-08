@@ -61,6 +61,7 @@
 #endif
 
 //创建事件处理器
+//setsize：客户端数量
 aeEventLoop *aeCreateEventLoop(int setsize) {
     aeEventLoop *eventLoop;
     int i;
@@ -141,8 +142,10 @@ int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
         errno = ERANGE;
         return AE_ERR;
     }
+
     aeFileEvent *fe = &eventLoop->events[fd];
 
+    //系统epoll上注册指定事件
     if (aeApiAddEvent(eventLoop, fd, mask) == -1)
         return AE_ERR;
     fe->mask |= mask;
@@ -210,12 +213,14 @@ long long aeCreateTimeEvent(aeEventLoop *eventLoop, long long milliseconds,
         aeTimeProc *proc, void *clientData,
         aeEventFinalizerProc *finalizerProc)
 {
+    //time event id
     long long id = eventLoop->timeEventNextId++;
     aeTimeEvent *te;
 
     te = zmalloc(sizeof(*te));
     if (te == NULL) return AE_ERR;
     te->id = id;
+    //计算定时事件触发时间
     aeAddMillisecondsToNow(milliseconds,&te->when_sec,&te->when_ms);
     te->timeProc = proc;
     te->finalizerProc = finalizerProc;
@@ -224,7 +229,7 @@ long long aeCreateTimeEvent(aeEventLoop *eventLoop, long long milliseconds,
     te->next = eventLoop->timeEventHead;
     if (te->next)
         te->next->prev = te;
-    eventLoop->timeEventHead = te;
+    eventLoop->timeEventHead = te;//LIFO队列
     return id;
 }
 

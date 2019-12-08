@@ -1364,6 +1364,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     return 1000/server.hz;
 }
 
+//每次进入事件循环执行的方法
 /* This function gets called every time Redis is entering the
  * main loop of the event driven library, that is, before to sleep
  * for ready file descriptors. */
@@ -1962,9 +1963,11 @@ int listenToPort(int port, int *fds, int *count) {
             int unsupported = 0;
             /* Bind * for both IPv6 and IPv4, we enter here only if
              * server.bindaddr_count == 0. */
+            //IPv6
             fds[*count] = anetTcp6Server(server.neterr,port,NULL,
                 server.tcp_backlog);
             if (fds[*count] != ANET_ERR) {
+                //设置socket非阻塞
                 anetNonBlock(NULL,fds[*count]);
                 (*count)++;
             } else if (errno == EAFNOSUPPORT) {
@@ -1974,6 +1977,7 @@ int listenToPort(int port, int *fds, int *count) {
 
             if (*count == 1 || unsupported) {
                 /* Bind the IPv4 address as well. */
+                //IPv4
                 fds[*count] = anetTcpServer(server.neterr,port,NULL,
                     server.tcp_backlog);
                 if (fds[*count] != ANET_ERR) {
@@ -2051,6 +2055,7 @@ void resetServerStats(void) {
     server.aof_delayed_fsync = 0;
 }
 
+//初始化server
 void initServer(void) {
     int j;
     //SIG_IGN忽略信号
@@ -2078,10 +2083,12 @@ void initServer(void) {
     server.clients_waiting_acks = listCreate();
     server.get_ack_from_slaves = 0;
     server.clients_paused = 0;
+    //物理内存总page数
     server.system_memory_size = zmalloc_get_memory_size();
 
     createSharedObjects();//共享的一些对象,放到了shared结构中
     adjustOpenFilesLimit();//自适应file limit
+    //初始化事件处理器
     server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);//创建event loop
     if (server.el == NULL) {
         serverLog(LL_WARNING,
@@ -2092,6 +2099,7 @@ void initServer(void) {
     server.db = zmalloc(sizeof(redisDb)*server.dbnum);
 
     /* Open the TCP listening socket for the user commands. */
+    // 监听指定端口绑定ip
     if (server.port != 0 &&
         listenToPort(server.port,server.ipfd,&server.ipfd_count) == C_ERR)
         exit(1);
@@ -2115,6 +2123,7 @@ void initServer(void) {
     }
 
     /* Create the Redis databases, and initialize other internal state. */
+    //初始化redis db
     for (j = 0; j < server.dbnum; j++) {
         server.db[j].dict = dictCreate(&dbDictType,NULL);
         server.db[j].expires = dictCreate(&keyptrDictType,NULL);
@@ -2138,7 +2147,9 @@ void initServer(void) {
     server.child_info_pipe[0] = -1;
     server.child_info_pipe[1] = -1;
     server.child_info_data.magic = 0;
+    //重置aof重写缓冲
     aofRewriteBufferReset();
+    //aof缓冲
     server.aof_buf = sdsempty();
     server.lastsave = time(NULL); /* At startup we consider the DB saved. */
     server.lastbgsave_try = 0;    /* At startup we never tried to BGSAVE. */
@@ -2164,6 +2175,7 @@ void initServer(void) {
     /* Create the timer callback, this is our way to process many background
      * operations incrementally, like clients timeout, eviction of unaccessed
      * expired keys and so forth. */
+    //注册定时任务处理一些后台操作
     if (aeCreateTimeEvent(server.el, 1, serverCron, NULL, NULL) == AE_ERR) {
         serverPanic("Can't create event loop timers.");
         exit(1);
@@ -2172,6 +2184,7 @@ void initServer(void) {
     /* Create an event handler for accepting new connections in TCP and Unix
      * domain sockets. */
     for (j = 0; j < server.ipfd_count; j++) {
+        //注册指定的事件到epoll上
         if (aeCreateFileEvent(server.el, server.ipfd[j], AE_READABLE,
             acceptTcpHandler,NULL) == AE_ERR)
             {
@@ -2213,12 +2226,17 @@ void initServer(void) {
         server.maxmemory_policy = MAXMEMORY_NO_EVICTION;
     }
 
+    //集群初始化
     if (server.cluster_enabled) clusterInit();
+
     replicationScriptCacheInit();
+    //lua初始化
     scriptingInit(1);
+    //慢查询日志初始化
     slowlogInit();
     latencyMonitorInit();
     bioInit();
+    //初始完成使用了多少字节内存
     server.initial_memory_usage = zmalloc_used_memory();
 }
 
@@ -3724,9 +3742,11 @@ int linuxOvercommitMemoryValue(void) {
 }
 
 void linuxMemoryWarnings(void) {
+    //内存分配策略
     if (linuxOvercommitMemoryValue() == 0) {
         serverLog(LL_WARNING,"WARNING overcommit_memory is set to 0! Background save may fail under low memory condition. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.");
     }
+    //是否开启了透明大页
     if (THPIsEnabled()) {
         serverLog(LL_WARNING,"WARNING you have Transparent Huge Pages (THP) support enabled in your kernel. This will create latency and memory usage issues with Redis. To fix this issue run the command 'echo never > /sys/kernel/mm/transparent_hugepage/enabled' as root, and add it to your /etc/rc.local in order to retain the setting after a reboot. Redis must be restarted after THP is disabled.");
     }
@@ -4223,12 +4243,14 @@ int main(int argc, char **argv) {
     int background = server.daemonize && !server.supervised;
     if (background)
         daemonize(); //后台运行
-
+    //初始化server
     initServer();
     if (background || server.pidfile)
         createPidFile();//记录pid 默认位置 /var/run/redis.pid
     redisSetProcTitle(argv[0]);
+    //打印ascii logo
     redisAsciiArt();
+    //检查backlog<somaxconn
     checkTcpBacklogSettings();
 
     if (!server.sentinel_mode) {
@@ -4238,6 +4260,7 @@ int main(int argc, char **argv) {
         linuxMemoryWarnings();
     #endif
         moduleLoadFromQueue();
+        //启动时从磁盘加载数据
         loadDataFromDisk();
         if (server.cluster_enabled) {
             if (verifyClusterConfigWithData() == C_ERR) {
