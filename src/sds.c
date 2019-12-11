@@ -224,6 +224,7 @@ sds sdsMakeRoomFor(sds s, size_t addlen) {
     len = sdslen(s);
     sh = (char*)s-sdsHdrSize(oldtype);
     newlen = (len+addlen);
+    //< 1kb
     if (newlen < SDS_MAX_PREALLOC)
         newlen *= 2;
     else
