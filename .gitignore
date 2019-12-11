@@ -33,3 +33,5 @@ Makefile.dep
 .idea
 cmake-build-debug/
 build/
+cmake-build-debug-wsl/
+cmake-build-debug/
