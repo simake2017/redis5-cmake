@@ -73,6 +73,7 @@ int listMatchObjects(void *a, void *b) {
 
 /* This function links the client to the global linked list of clients.
  * unlinkClient() does the opposite, among other things. */
+// 加入到server.clients链表
 void linkClient(client *c) {
     listAddNodeTail(server.clients,c);
     /* Note that we remember the linked list node where the client is stored,
@@ -91,10 +92,15 @@ client *createClient(int fd) {
      * in the context of a client. When commands are executed in other
      * contexts (for instance a Lua script) we need a non connected client. */
     if (fd != -1) {
+        //设置socket非阻塞
         anetNonBlock(NULL,fd);
+        //TCP_NODELAY
         anetEnableTcpNoDelay(NULL,fd);
+        //SO_KEEPALIVE
         if (server.tcpkeepalive)
             anetKeepAlive(NULL,fd,server.tcpkeepalive);
+
+        //注册到epoll监听可读事件
         if (aeCreateFileEvent(server.el,fd,AE_READABLE,
             readQueryFromClient, c) == AE_ERR)
         {
@@ -104,6 +110,7 @@ client *createClient(int fd) {
         }
     }
 
+    //选择0号db
     selectDb(c,0);
     uint64_t client_id;
     atomicGetIncr(server.next_client_id,client_id,1);
@@ -156,6 +163,7 @@ client *createClient(int fd) {
     c->client_list_node = NULL;
     listSetFreeMethod(c->pubsub_patterns,decrRefCountVoid);
     listSetMatchMethod(c->pubsub_patterns,listMatchObjects);
+    //加入到server.clients链表
     if (fd != -1) linkClient(c);
     initClientMultiState(c);
     return c;
@@ -663,6 +671,7 @@ int clientHasPendingReplies(client *c) {
 #define MAX_ACCEPTS_PER_CALL 1000
 static void acceptCommonHandler(int fd, int flags, char *ip) {
     client *c;
+    //创建client,监听epoll上的可读事件
     if ((c = createClient(fd)) == NULL) {
         serverLog(LL_WARNING,
             "Error registering fd event for the new client: %s (fd=%d)",
@@ -733,13 +742,18 @@ static void acceptCommonHandler(int fd, int flags, char *ip) {
 
 //读事件处理器
 void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
+    //cport:端口
+    //cfd:socket accept fd
+    //
     int cport, cfd, max = MAX_ACCEPTS_PER_CALL;
+    //client ip
     char cip[NET_IP_STR_LEN];
     UNUSED(el);
     UNUSED(mask);
     UNUSED(privdata);
 
     while(max--) {
+        //获取accept socket fd
         cfd = anetTcpAccept(server.neterr, fd, cip, sizeof(cip), &cport);
         if (cfd == ANET_ERR) {
             if (errno != EWOULDBLOCK)
@@ -748,6 +762,7 @@ void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
             return;
         }
         serverLog(LL_VERBOSE,"Accepted %s:%d", cip, cport);
+        //创建client连接,监听epoll上的可读事件
         acceptCommonHandler(cfd,0,cip);
     }
 }
@@ -1517,6 +1532,7 @@ void processInputBufferAndReplicate(client *c) {
     }
 }
 
+//从客户端读数据
 void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
     client *c = (client*) privdata;
     int nread, readlen;

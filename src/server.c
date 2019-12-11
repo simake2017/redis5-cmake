@@ -1425,6 +1425,7 @@ void beforeSleep(struct aeEventLoop *eventLoop) {
 /* This function is called immadiately after the event loop multiplexing
  * API returned, and the control is going to soon return to Redis by invoking
  * the different events callbacks. */
+//事件循环从epoll中返回后立即调用
 void afterSleep(struct aeEventLoop *eventLoop) {
     UNUSED(eventLoop);
     if (moduleCount()) moduleAcquireGIL();

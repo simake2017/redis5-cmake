@@ -257,6 +257,7 @@ int aeDeleteTimeEvent(aeEventLoop *eventLoop, long long id)
  *    Much better but still insertion or deletion of timers is O(N).
  * 2) Use a skiplist to have this operation as O(1) and insertion as O(log(N)).
  */
+//查找最先需要触发的时间事件
 static aeTimeEvent *aeSearchNearestTimer(aeEventLoop *eventLoop)
 {
     aeTimeEvent *te = eventLoop->timeEventHead;
@@ -273,6 +274,7 @@ static aeTimeEvent *aeSearchNearestTimer(aeEventLoop *eventLoop)
 }
 
 /* Process time events */
+//处理定时事件
 static int processTimeEvents(aeEventLoop *eventLoop) {
     int processed = 0;
     aeTimeEvent *te;
@@ -287,6 +289,7 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
      * events to be processed ASAP when this happens: the idea is that
      * processing events earlier is less dangerous than delaying them
      * indefinitely, and practice suggests it is. */
+    //如果系统时钟偏移 则强制定时任务的尽快执行
     if (now < eventLoop->lastTime) {
         te = eventLoop->timeEventHead;
         while(te) {
@@ -303,6 +306,7 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
         long long id;
 
         /* Remove events scheduled for deletion. */
+        //删除无效的定时任务
         if (te->id == AE_DELETED_EVENT_ID) {
             aeTimeEvent *next = te->next;
             if (te->prev)
@@ -311,6 +315,7 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
                 eventLoop->timeEventHead = te->next;
             if (te->next)
                 te->next->prev = te->prev;
+            //回调
             if (te->finalizerProc)
                 te->finalizerProc(eventLoop, te->clientData);
             zfree(te);
@@ -323,11 +328,14 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
          * add new timers on the head, however if we change the implementation
          * detail, this check may be useful again: we keep it here for future
          * defense. */
+        //当前这段逻辑无效,应为时间事件是向链表头部方向新增,LIFO队列
         if (te->id > maxId) {
             te = te->next;
             continue;
         }
+        //获取当前时间
         aeGetTime(&now_sec, &now_ms);
+        //定时事件触发
         if (now_sec > te->when_sec ||
             (now_sec == te->when_sec && now_ms >= te->when_ms))
         {
@@ -337,6 +345,7 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
             retval = te->timeProc(eventLoop, id, te->clientData);
             processed++;
             if (retval != AE_NOMORE) {
+                //计算下次执行的时间
                 aeAddMillisecondsToNow(retval,&te->when_sec,&te->when_ms);
             } else {
                 te->id = AE_DELETED_EVENT_ID;
@@ -366,20 +375,23 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
     int processed = 0, numevents;
 
     /* Nothing to do? return ASAP */
+    //如果不处理定时器事件，也不处理文件事件，就直接返回
     if (!(flags & AE_TIME_EVENTS) && !(flags & AE_FILE_EVENTS)) return 0;
 
     /* Note that we want call select() even if there are no
      * file events to process as long as we want to process time
      * events, in order to sleep until the next time event is ready
      * to fire. */
+    //如果有socket事件||要处理定时器事件并且没有设置不阻塞标志
     if (eventLoop->maxfd != -1 ||
         ((flags & AE_TIME_EVENTS) && !(flags & AE_DONT_WAIT))) {
         int j;
         aeTimeEvent *shortest = NULL;
         struct timeval tv, *tvp;
 
+        //时间事件&&没有设置非阻塞
         if (flags & AE_TIME_EVENTS && !(flags & AE_DONT_WAIT))
-            shortest = aeSearchNearestTimer(eventLoop);
+            shortest = aeSearchNearestTimer(eventLoop); //查找最先需要触发的时间事件
         if (shortest) {
             long now_sec, now_ms;
 
@@ -388,6 +400,7 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
 
             /* How many milliseconds we need to wait for the next
              * time event to fire? */
+            //距离触发事件还剩多少毫秒
             long long ms =
                 (shortest->when_sec - now_sec)*1000 +
                 shortest->when_ms - now_ms;
@@ -403,17 +416,20 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
             /* If we have to check for events but need to return
              * ASAP because of AE_DONT_WAIT we need to set the timeout
              * to zero */
+            //如果设置了不阻塞标志，阻塞时间为0，表示不阻塞
             if (flags & AE_DONT_WAIT) {
                 tv.tv_sec = tv.tv_usec = 0;
                 tvp = &tv;
             } else {
                 /* Otherwise we can block */
+                //NULL一致阻塞
                 tvp = NULL; /* wait forever */
             }
         }
 
         /* Call the multiplexing API, will return only on timeout or when
          * some event fires. */
+        //等待获取触发的事件直到超时,超时时间可以有最近需要执行的定时任务确定
         numevents = aeApiPoll(eventLoop, tvp);
 
         /* After sleep callback. */
@@ -471,9 +487,11 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
         }
     }
     /* Check time events */
+    //触发定时任务
     if (flags & AE_TIME_EVENTS)
         processed += processTimeEvents(eventLoop);
 
+    //处理了多少个事件
     return processed; /* return the number of processed file/time events */
 }
 

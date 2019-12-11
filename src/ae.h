@@ -75,20 +75,21 @@ typedef struct aeFileEvent {
     aeFileProc *rfileProc;
     //写事件处理器
     aeFileProc *wfileProc;
-    //客户端数据
+    //连接的client
     void *clientData;
 } aeFileEvent;
 
 /* Time event structure */
 typedef struct aeTimeEvent {
-    //事件id
+    //事件id  -1标志事件已经执行
     long long id; /* time event identifier. */
     //触发时间
     long when_sec; /* seconds */
     //触发时间ms
     long when_ms; /* milliseconds */
-    //回调函数
+    //定时任务触发时的回调函数
     aeTimeProc *timeProc;
+    //移除无效定时任务时的回调
     aeEventFinalizerProc *finalizerProc;
     void *clientData;
     //前一个节点
@@ -99,7 +100,9 @@ typedef struct aeTimeEvent {
 
 /* A fired event */
 typedef struct aeFiredEvent {
+    //文件描述符fd
     int fd;
+    //触发事件类型
     int mask;
 } aeFiredEvent;
 
@@ -111,10 +114,11 @@ typedef struct aeEventLoop {
     int setsize; /* max number of file descriptors tracked */
     //定时器事件编号
     long long timeEventNextId;
-    //最后更新时间
+    //定时事件最后更新时间，用于与当前时间比较，检测系统时钟是否有问题
     time_t lastTime;     /* Used to detect system clock skew */
     //注册的事件
     aeFileEvent *events; /* Registered events */
+    //触发事件
     aeFiredEvent *fired; /* Fired events */
     //定时事件链表头节点指针  LIFO队列
     aeTimeEvent *timeEventHead;
@@ -124,7 +128,7 @@ typedef struct aeEventLoop {
     void *apidata; /* This is used for polling API specific data */
     //每次进入事件循环触发的操作
     aeBeforeSleepProc *beforesleep;
-    //
+    //获取到触发的事件后执行
     aeBeforeSleepProc *aftersleep;
 } aeEventLoop;
 

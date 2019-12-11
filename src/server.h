@@ -637,10 +637,14 @@ typedef struct clientReplyBlock {
  * database. The database number is the 'id' field in the structure. */
 //redis数据库结构
 typedef struct redisDb {
+    //kv
     dict *dict;                 /* The keyspace for this DB */
     dict *expires;              /* Timeout of keys with a timeout set */
+    //BLPOP时阻塞的key
     dict *blocking_keys;        /* Keys with clients waiting for data (BLPOP)*/
+    //准备就绪的key
     dict *ready_keys;           /* Blocked keys that received a PUSH */
+    //MULTI/EXEC 需要监听的key
     dict *watched_keys;         /* WATCHED keys for MULTI/EXEC CAS */
     //从0开始 数据库编号
     int id;                     /* Database ID */
@@ -714,11 +718,14 @@ typedef struct readyList {
 /* With multiplexing we need to take per-client state.
  * Clients are taken in a linked list. */
 typedef struct client {
+    //client id
     uint64_t id;            /* Client incremental unique ID. */
+    //与服务端建立的socket连接
     int fd;                 /* Client socket. */
     //client选择的db
     redisDb *db;            /* Pointer to currently SELECTed DB. */
     robj *name;             /* As set by CLIENT SETNAME. */
+    //client缓冲
     sds querybuf;           /* Buffer we use to accumulate client queries. */
     size_t qb_pos;          /* The position we have read in querybuf. */
     sds pending_querybuf;   /* If this client is flagged as master, this buffer
@@ -766,6 +773,7 @@ typedef struct client {
     dict *pubsub_channels;  /* channels a client is interested in (SUBSCRIBE) */
     list *pubsub_patterns;  /* patterns a client is interested in (SUBSCRIBE) */
     sds peerid;             /* Cached peer ID. */
+    //指向服务端clinets链表中的节点
     listNode *client_list_node; /* list node in client list */
 
     /* Response buffer */
@@ -1011,6 +1019,7 @@ struct redisServer {
     mstime_t clients_pause_end_time; /* Time when we undo clients_paused */
     char neterr[ANET_ERR_LEN];   /* Error buffer for anet.c */
     dict *migrate_cached_sockets;/* MIGRATE cached sockets */
+    //下一个clientid 原子递增
     uint64_t next_client_id;    /* Next client unique ID. Incremental. */
     //不接受外部连接,哨兵模式必须关闭0
     int protected_mode;         /* Don't accept external connections. */
@@ -1032,6 +1041,7 @@ struct redisServer {
     /* Fields used only for stats */
     time_t stat_starttime;          /* Server start time */
     long long stat_numcommands;     /* Number of processed commands */
+    //连接的client数量
     long long stat_numconnections;  /* Number of connections received */
     long long stat_expiredkeys;     /* Number of expired keys */
     double stat_expired_stale_perc; /* Percentage of keys probably expired */
@@ -1047,6 +1057,7 @@ struct redisServer {
     size_t stat_peak_memory;        /* Max used memory record */
     long long stat_fork_time;       /* Time needed to perform latest fork() */
     double stat_fork_rate;          /* Fork rate in GB/sec. */
+    //统计超过最大连接数被拒绝的client数量
     long long stat_rejected_conn;   /* Clients rejected because of maxclients */
     long long stat_sync_full;       /* Number of full resyncs with slaves. */
     long long stat_sync_partial_ok; /* Number of accepted PSYNC requests. */
@@ -1077,7 +1088,7 @@ struct redisServer {
     int verbosity;                  /* Loglevel in redis.conf */
     //客户端超时时间 默认不会超时
     int maxidletime;                /* Client timeout in seconds */
-    //
+    // tcp keepalive
     int tcpkeepalive;
     //过期开关
     int active_expire_enabled;      /* Can be disabled for testing purposes. */
