@@ -1305,6 +1305,7 @@ int processMultibulkBuffer(client *c) {
     //参数的数量包括命令本身
     long long ll;
 
+    //解析参数的个数
     if (c->multibulklen == 0) {
         /* The client should have been reset */
         serverAssertWithInfo(c,NULL,c->argc == 0);
@@ -1353,6 +1354,7 @@ int processMultibulkBuffer(client *c) {
     }
 
     serverAssertWithInfo(c,NULL,c->multibulklen > 0);
+    //解析具体的参数
     while(c->multibulklen) {
         /* Read bulk length if unknown */
         //初始时是-1

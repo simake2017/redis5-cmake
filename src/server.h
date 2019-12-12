@@ -736,9 +736,11 @@ typedef struct client {
                                replication stream that we are receiving from
                                the master. */
     size_t querybuf_peak;   /* Recent (100ms or more) peak of querybuf size. */
+    //参数的个数包括命令本身
     int argc;               /* Num of arguments of current command. */
     //存放解析后的命令
     robj **argv;            /* Arguments of current command. */
+    //lastcmd:最后一次执行的命令
     struct redisCommand *cmd, *lastcmd;  /* Last command executed. */
     //请求协议的类型
     // telnet :PROTO_REQ_INLINE
@@ -758,6 +760,7 @@ typedef struct client {
     time_t obuf_soft_limit_reached_time;
     //CLIENT_MASTER CLIENT_MULTI等  client标志
     int flags;              /* Client flags: CLIENT_* macros. */
+    //是否认证过
     int authenticated;      /* When requirepass is non-NULL. */
     int replstate;          /* Replication state if this is a slave. */
     int repl_put_online_on_ack; /* Install slave write handler on ACK. */
