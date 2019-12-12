@@ -269,7 +269,9 @@ typedef long long mstime_t; /* millisecond time type. */
 #define BLOCKED_NUM 6     /* Number of blocked states. */
 
 /* Client request types */
+//telnet协议
 #define PROTO_REQ_INLINE 1
+//redis client协议
 #define PROTO_REQ_MULTIBULK 2
 
 /* Client classes for client limits, currently used only for
@@ -727,6 +729,7 @@ typedef struct client {
     robj *name;             /* As set by CLIENT SETNAME. */
     //client缓冲
     sds querybuf;           /* Buffer we use to accumulate client queries. */
+    //querybuf缓冲的已经读取到的位置
     size_t qb_pos;          /* The position we have read in querybuf. */
     sds pending_querybuf;   /* If this client is flagged as master, this buffer
                                represents the yet not applied portion of the
@@ -734,21 +737,26 @@ typedef struct client {
                                the master. */
     size_t querybuf_peak;   /* Recent (100ms or more) peak of querybuf size. */
     int argc;               /* Num of arguments of current command. */
+    //存放解析后的命令
     robj **argv;            /* Arguments of current command. */
     struct redisCommand *cmd, *lastcmd;  /* Last command executed. */
     //请求协议的类型
     // telnet :PROTO_REQ_INLINE
     // redis-cli:PROTO_REQ_MULTIBULK
     int reqtype;            /* Request protocol type: PROTO_REQ_* */
+    //命令的参数个数 包括命令本身
     int multibulklen;       /* Number of multi bulk arguments left to read. */
+    //参数的长度
     long bulklen;           /* Length of bulk argument in multi bulk request. */
     list *reply;            /* List of reply objects to send to the client. */
     unsigned long long reply_bytes; /* Tot bytes of objects in reply list. */
     size_t sentlen;         /* Amount of bytes already sent in the current
                                buffer or object being sent. */
     time_t ctime;           /* Client creation time. */
+    //客户端与服务端最后交互事件 用于判断是否客户端超时
     time_t lastinteraction; /* Time of the last interaction, used for timeout */
     time_t obuf_soft_limit_reached_time;
+    //CLIENT_MASTER CLIENT_MULTI等  client标志
     int flags;              /* Client flags: CLIENT_* macros. */
     int authenticated;      /* When requirepass is non-NULL. */
     int replstate;          /* Replication state if this is a slave. */
@@ -1016,6 +1024,7 @@ struct redisServer {
     list *clients_to_close;     /* Clients to close asynchronously */
     list *clients_pending_write; /* There is to write or install handler. */
     list *slaves, *monitors;    /* List of slaves and MONITORs */
+    //server当前在处理的client
     client *current_client; /* Current client, only used on crash report */
     rax *clients_index;         /* Active clients dictionary by client ID. */
     int clients_paused;         /* True if clients are currently paused */
@@ -1074,6 +1083,7 @@ struct redisServer {
     //慢查询日志最大保存多少个
     unsigned long slowlog_max_len;     /* SLOWLOG max number of items logged */
     struct malloc_stats cron_malloc_stats; /* sampled in serverCron(). */
+    //统计总共接收的字节数
     long long stat_net_input_bytes; /* Bytes read from network. */
     long long stat_net_output_bytes; /* Bytes written to network. */
     size_t stat_rdb_cow_bytes;      /* Copy on write bytes during RDB saving. */

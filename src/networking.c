@@ -1302,6 +1302,7 @@ static void setProtocolError(const char *errstr, client *c) {
 int processMultibulkBuffer(client *c) {
     char *newline = NULL;
     int ok;
+    //参数的数量包括命令本身
     long long ll;
 
     if (c->multibulklen == 0) {
@@ -1309,6 +1310,9 @@ int processMultibulkBuffer(client *c) {
         serverAssertWithInfo(c,NULL,c->argc == 0);
 
         /* Multi bulk length cannot be read without a \r\n */
+        //*1\r\n$7\r\nCOMMAND\r\n
+        //\r\n$7\r\nCOMMAND\r\n
+        //第一个\r后的字符串
         newline = strchr(c->querybuf+c->qb_pos,'\r');
         if (newline == NULL) {
             if (sdslen(c->querybuf)-c->qb_pos > PROTO_INLINE_MAX_SIZE) {
@@ -1332,21 +1336,29 @@ int processMultibulkBuffer(client *c) {
             return C_ERR;
         }
 
+        //*1\r\n$7\r\nCOMMAND\r\n
+        //newline-c->querybuf=2 *1
+        //+2 跳过\r\n   $7\r\nCOMMAND\r\n
         c->qb_pos = (newline-c->querybuf)+2;
 
         if (ll <= 0) return C_OK;
 
+        //命令的参数个数
         c->multibulklen = ll;
 
         /* Setup argv array on client structure */
         if (c->argv) zfree(c->argv);
+        //存放解析后的命令
         c->argv = zmalloc(sizeof(robj*)*c->multibulklen);
     }
 
     serverAssertWithInfo(c,NULL,c->multibulklen > 0);
     while(c->multibulklen) {
         /* Read bulk length if unknown */
+        //初始时是-1
         if (c->bulklen == -1) {
+            //c->querybuf+c->qb_pos  $7\r\nCOMMAND\r\n
+            //newline \r\nCOMMAND\r\n
             newline = strchr(c->querybuf+c->qb_pos,'\r');
             if (newline == NULL) {
                 if (sdslen(c->querybuf)-c->qb_pos > PROTO_INLINE_MAX_SIZE) {
@@ -1370,6 +1382,7 @@ int processMultibulkBuffer(client *c) {
                 return C_ERR;
             }
 
+            //$7\r\nCOMMAND\r\n    ll=7
             ok = string2ll(c->querybuf+c->qb_pos+1,newline-(c->querybuf+c->qb_pos+1),&ll);
             if (!ok || ll < 0 || ll > server.proto_max_bulk_len) {
                 addReplyError(c,"Protocol error: invalid bulk length");
@@ -1377,8 +1390,9 @@ int processMultibulkBuffer(client *c) {
                 return C_ERR;
             }
 
+            //COMMAND\r\n
             c->qb_pos = newline-c->querybuf+2;
-            if (ll >= PROTO_MBULK_BIG_ARG) {
+            if (ll >= newline) {
                 /* If we are going to read a large object from network
                  * try to make it likely that it will start at c->querybuf
                  * boundary so that we can optimize object creation
@@ -1465,15 +1479,18 @@ void processInputBuffer(client *c) {
         /* Determine request type when unknown. */
         if (!c->reqtype) {
             if (c->querybuf[c->qb_pos] == '*') {
+                //redis client协议
                 c->reqtype = PROTO_REQ_MULTIBULK;
             } else {
+                //telnet协议
                 c->reqtype = PROTO_REQ_INLINE;
             }
         }
 
+        //处理telnet连接
         if (c->reqtype == PROTO_REQ_INLINE) {
             if (processInlineBuffer(c) != C_OK) break;
-        } else if (c->reqtype == PROTO_REQ_MULTIBULK) {
+        } else if (c->reqtype == PROTO_REQ_MULTIBULK) {   //处理redis-client连接
             if (processMultibulkBuffer(c) != C_OK) break;
         } else {
             serverPanic("Unknown request type");
@@ -1518,6 +1535,7 @@ void processInputBuffer(client *c) {
  * is flagged as master. Usually you want to call this instead of the
  * raw processInputBuffer(). */
 void processInputBufferAndReplicate(client *c) {
+    //不是主节点
     if (!(c->flags & CLIENT_MASTER)) {
         processInputBuffer(c);
     } else {
@@ -1564,8 +1582,11 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
     if (c->querybuf_peak < qblen) c->querybuf_peak = qblen;
     //扩容
     c->querybuf = sdsMakeRoomFor(c->querybuf, readlen);
+    //读取readlen字节到querybuf中(从qblen处开始)
     nread = read(fd, c->querybuf+qblen, readlen);
+    //-1 出现错误
     if (nread == -1) {
+        //需要重试
         if (errno == EAGAIN) {
             return;
         } else {
@@ -1573,11 +1594,11 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
             freeClient(c);
             return;
         }
-    } else if (nread == 0) {
+    } else if (nread == 0) { //没有读取到数据
         serverLog(LL_VERBOSE, "Client closed connection");
         freeClient(c);
         return;
-    } else if (c->flags & CLIENT_MASTER) {
+    } else if (c->flags & CLIENT_MASTER) {  //This client is a master server
         /* Append the query buffer to the pending (not applied) buffer
          * of the master. We'll use this buffer later in order to have a
          * copy of the string applied by the last command executed. */
@@ -1585,13 +1606,18 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
                                         c->querybuf+qblen,nread);
     }
 
+    //更新sds的len
     sdsIncrLen(c->querybuf,nread);
+    //更新最后交互时间
     c->lastinteraction = server.unixtime;
     if (c->flags & CLIENT_MASTER) c->read_reploff += nread;
     server.stat_net_input_bytes += nread;
+    //缓冲超过阈值
     if (sdslen(c->querybuf) > server.client_max_querybuf_len) {
+        //客户都安信息转为字符串
         sds ci = catClientInfoString(sdsempty(),c), bytes = sdsempty();
 
+        //获取前64字节
         bytes = sdscatrepr(bytes,c->querybuf,64);
         serverLog(LL_WARNING,"Closing client that reached max query buffer length: %s (qbuf initial bytes: %s)", ci, bytes);
         sdsfree(ci);
