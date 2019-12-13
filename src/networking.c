@@ -740,7 +740,7 @@ static void acceptCommonHandler(int fd, int flags, char *ip) {
     c->flags |= flags;
 }
 
-//读事件处理器
+//服务端socket读事件处理器，创建连接
 void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     //cport:端口
     //cfd:socket accept fd
@@ -751,7 +751,7 @@ void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     UNUSED(el);
     UNUSED(mask);
     UNUSED(privdata);
-
+    //每次事件循环最多可以处理1000个客户端的连接
     while(max--) {
         //获取accept socket fd
         cfd = anetTcpAccept(server.neterr, fd, cip, sizeof(cip), &cport);
