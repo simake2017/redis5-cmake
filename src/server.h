@@ -977,6 +977,7 @@ struct redisServer {
     char *executable;           /* Absolute executable file path. */
     //命令参数
     char **exec_argv;           /* Executable argv vector (copy). */
+    //是否动态调整hz
     int dynamic_hz;             /* Change hz value depending on # of clients. */
     //定时器中断频率配置 单位秒
     int config_hz;              /* Configured HZ value. May be different than
@@ -992,6 +993,7 @@ struct redisServer {
     dict *orig_commands;        /* Command table before command renaming. */
     //事件处理器
     aeEventLoop *el;
+    //lru时钟
     unsigned int lruclock;      /* Clock for LRU eviction */
     int shutdown_asap;          /* SHUTDOWN needed ASAP */
     int activerehashing;        /* Incremental rehash in serverCron() */
@@ -1002,6 +1004,7 @@ struct redisServer {
     char *pidfile;              /* PID file path */
     //32位还是64位机器
     int arch_bits;              /* 32 or 64 depending on sizeof(long) */
+    //serverCron定时任务执行次数
     int cronloops;              /* Number of times the cron function run */
     //随机生成的hex，+1为了给放置结尾标记\0
     char runid[CONFIG_RUN_ID_SIZE+1];  /* ID always different at every exec. */
@@ -1087,6 +1090,7 @@ struct redisServer {
     long long stat_active_defrag_key_hits;  /* number of keys with moved allocations */
     long long stat_active_defrag_key_misses;/* number of keys scanned and not moved */
     long long stat_active_defrag_scanned;   /* number of dictEntries scanned */
+    //使用的最大内存
     size_t stat_peak_memory;        /* Max used memory record */
     long long stat_fork_time;       /* Time needed to perform latest fork() */
     double stat_fork_rate;          /* Fork rate in GB/sec. */

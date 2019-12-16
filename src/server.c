@@ -816,6 +816,7 @@ long long getInstantaneousMetric(int metric) {
  * The function gets the current time in milliseconds as argument since
  * it gets called multiple times in a loop, so calling gettimeofday() for
  * each iteration would be costly without any actual gain. */
+//检查client超时
 int clientsCronHandleTimeout(client *c, mstime_t now_ms) {
     time_t now = now_ms/1000;
 
@@ -852,6 +853,7 @@ int clientsCronHandleTimeout(client *c, mstime_t now_ms) {
  * free space not used, this function reclaims space if needed.
  *
  * The function always returns 0 as it never terminates the client. */
+//释放未使用的query buffer空间
 int clientsCronResizeQueryBuffer(client *c) {
     size_t querybuf_size = sdsAllocSize(c->querybuf);
     time_t idletime = server.unixtime - c->lastinteraction;
@@ -986,6 +988,7 @@ void clientsCron(void) {
         /* Rotate the list, take the current head, process.
          * This way if the client must be removed from the list it's the
          * first element and we don't incur into O(N) computation. */
+        //将尾节点翻转到头结点
         listRotate(server.clients);
         head = listFirst(server.clients);
         c = listNodeValue(head);
@@ -1109,23 +1112,27 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     if (server.watchdog_period) watchdogScheduleSignal(server.watchdog_period);
 
     /* Update the time cache. */
+    //更新时间
     updateCachedTime();
 
     server.hz = server.config_hz;
     /* Adapt the server.hz value to the number of configured clients. If we have
      * many clients, we want to call serverCron() with an higher frequency. */
+    //动态调整hz
     if (server.dynamic_hz) {
         while (listLength(server.clients) / server.hz >
                MAX_CLIENTS_PER_CLOCK_TICK)
         {
             server.hz *= 2;
             if (server.hz > CONFIG_MAX_HZ) {
+                //最大500
                 server.hz = CONFIG_MAX_HZ;
                 break;
             }
         }
     }
 
+    //统计数据
     run_with_period(100) {
         trackInstantaneousMetric(STATS_METRIC_COMMAND,server.stat_numcommands);
         trackInstantaneousMetric(STATS_METRIC_NET_INPUT,
@@ -1145,6 +1152,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
      *
      * Note that you can change the resolution altering the
      * LRU_CLOCK_RESOLUTION define. */
+    //lru时钟
     unsigned long lruclock = getLRUClock();
     atomicSet(server.lruclock,lruclock);
 
@@ -1215,6 +1223,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     }
 
     /* We need to do a few operations on clients asynchronously. */
+    //与client相关的操作
     clientsCron();
 
     /* Handle background operations on Redis databases. */
@@ -2823,6 +2832,7 @@ void closeListeningSockets(int unlink_unix_socket) {
     }
 }
 
+//关机前的准备工作
 int prepareForShutdown(int flags) {
     int save = flags & SHUTDOWN_SAVE;
     int nosave = flags & SHUTDOWN_NOSAVE;
