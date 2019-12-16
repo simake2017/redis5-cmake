@@ -89,9 +89,11 @@ void setGenericCommand(client *c, int flags, robj *key, robj *val, robj *expire,
     setKey(c->db,key,val);
     server.dirty++;
     if (expire) setExpire(c,c->db,key,mstime()+milliseconds);
+    //事件通知
     notifyKeyspaceEvent(NOTIFY_STRING,"set",key,c->db->id);
     if (expire) notifyKeyspaceEvent(NOTIFY_GENERIC,
         "expire",key,c->db->id);
+    //写响应数据到缓冲中
     addReply(c, ok_reply ? ok_reply : shared.ok);
 }
 

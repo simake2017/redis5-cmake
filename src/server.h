@@ -636,6 +636,7 @@ struct evictionPoolEntry; /* Defined in evict.c */
 
 /* This structure is used in order to represent the output buffer of a client,
  * which is actually a linked list of blocks like that, that is: client->reply. */
+//client输出缓冲结构
 typedef struct clientReplyBlock {
     size_t size, used;
     char buf[];
@@ -758,7 +759,9 @@ typedef struct client {
     int multibulklen;       /* Number of multi bulk arguments left to read. */
     //参数的长度
     long bulklen;           /* Length of bulk argument in multi bulk request. */
+    //响应数据链表
     list *reply;            /* List of reply objects to send to the client. */
+    //响应数据链表中总字节数
     unsigned long long reply_bytes; /* Tot bytes of objects in reply list. */
     size_t sentlen;         /* Amount of bytes already sent in the current
                                buffer or object being sent. */
@@ -800,7 +803,9 @@ typedef struct client {
     listNode *client_list_node; /* list node in client list */
 
     /* Response buffer */
+    //buf中下次写入的位置
     int bufpos;
+    //输出缓冲 16k
     char buf[PROTO_REPLY_CHUNK_BYTES];
 } client;
 
@@ -1033,7 +1038,9 @@ struct redisServer {
     int cfd_count;              /* Used slots in cfd[] */
     //client链表
     list *clients;              /* List of active clients */
+    //异步关闭的client链表
     list *clients_to_close;     /* Clients to close asynchronously */
+    //等待写的client链表
     list *clients_pending_write; /* There is to write or install handler. */
     //slaves从节点
     list *slaves, *monitors;    /* List of slaves and MONITORs */
@@ -1137,6 +1144,7 @@ struct redisServer {
     //是否守护进程
     int daemonize;                  /* True if running as a daemon */
     //在redis给client发送数据的过程中，会根据该参数判断发送的数据量是否过大
+    //不用类型的客户端的输出缓冲限制
     clientBufferLimitsConfig client_obuf_limits[CLIENT_TYPE_OBUF_COUNT];
     /* AOF persistence */
     //aof开关与状态
