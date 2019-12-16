@@ -64,6 +64,7 @@ robj *lookupKey(redisDb *db, robj *key, int flags) {
             server.aof_child_pid == -1 &&
             !(flags & LOOKUP_NOTOUCH))
         {
+            //LFU策略
             if (server.maxmemory_policy & MAXMEMORY_FLAG_LFU) {
                 updateLFU(val);
             } else {
@@ -150,6 +151,7 @@ robj *lookupKeyRead(redisDb *db, robj *key) {
  * Returns the linked value object if the key exists or NULL if the key
  * does not exist in the specified DB. */
 robj *lookupKeyWrite(redisDb *db, robj *key) {
+    //释放过期的key
     expireIfNeeded(db,key);
     return lookupKey(db,key,LOOKUP_NONE);
 }
@@ -170,6 +172,7 @@ robj *lookupKeyWriteOrReply(client *c, robj *key, robj *reply) {
  * counter of the value if needed.
  *
  * The program is aborted if the key already exists. */
+//新增kv到db中,唤醒阻塞的key,更新solt
 void dbAdd(redisDb *db, robj *key, robj *val) {
     sds copy = sdsdup(key->ptr);
     int retval = dictAdd(db->dict, copy, val);
@@ -177,7 +180,7 @@ void dbAdd(redisDb *db, robj *key, robj *val) {
     serverAssertWithInfo(NULL,key,retval == DICT_OK);
     if (val->type == OBJ_LIST ||
         val->type == OBJ_ZSET)
-        signalKeyAsReady(db, key);
+        signalKeyAsReady(db, key); //list与set 唤醒阻塞的key
     if (server.cluster_enabled) slotToKeyAdd(key);
 }
 
@@ -198,6 +201,7 @@ void dbOverwrite(redisDb *db, robj *key, robj *val) {
     dictSetVal(db->dict, de, val);
 
     if (server.lazyfree_lazy_server_del) {
+        //异步删除值
         freeObjAsync(old);
         dictSetVal(db->dict, &auxentry, NULL);
     }
@@ -221,6 +225,7 @@ void setKey(redisDb *db, robj *key, robj *val) {
     }
     incrRefCount(val);
     removeExpire(db,key);
+    //key修改信号
     signalModifiedKey(db,key);
 }
 
@@ -392,6 +397,7 @@ int selectDb(client *c, int id) {
  * Every time a DB is flushed the function signalFlushDb() is called.
  *----------------------------------------------------------------------------*/
 
+//key修改信号
 void signalModifiedKey(redisDb *db, robj *key) {
     touchWatchedKey(db,key);
 }
@@ -1080,8 +1086,10 @@ void setExpire(client *c, redisDb *db, robj *key, long long when) {
     kde = dictFind(db->dict,key->ptr);
     serverAssertWithInfo(NULL,key,kde != NULL);
     de = dictAddOrFind(db->expires,dictGetKey(kde));
+    //保存过期时间到s64
     dictSetSignedIntegerVal(de,when);
 
+    //slave可写
     int writable_slave = server.masterhost && server.repl_slave_ro == 0;
     if (c && writable_slave && !(c->flags & CLIENT_MASTER))
         rememberSlaveKeyWithExpire(db,key);
@@ -1089,6 +1097,8 @@ void setExpire(client *c, redisDb *db, robj *key, long long when) {
 
 /* Return the expire time of the specified key, or -1 if no expire
  * is associated with this key (i.e. the key is non volatile) */
+//-1:没有在过期字典中
+//返回过期时间
 long long getExpire(redisDb *db, robj *key) {
     dictEntry *de;
 
@@ -1098,7 +1108,9 @@ long long getExpire(redisDb *db, robj *key) {
 
     /* The entry was found in the expire dict, this means it should also
      * be present in the main dict (safety check). */
+    //expires字典中存在则kv字典中一定存在
     serverAssertWithInfo(NULL,key,dictFind(db->dict,key->ptr) != NULL);
+    //返回过期时间
     return dictGetSignedIntegerVal(de);
 }
 
@@ -1110,6 +1122,7 @@ long long getExpire(redisDb *db, robj *key) {
  * AOF and the master->slave link guarantee operation ordering, everything
  * will be consistent even if we allow write operations against expiring
  * keys. */
+//主节点广播过期key的del操作到AOF file与从节点
 void propagateExpire(redisDb *db, robj *key, int lazy) {
     robj *argv[2];
 
@@ -1118,8 +1131,10 @@ void propagateExpire(redisDb *db, robj *key, int lazy) {
     incrRefCount(argv[0]);
     incrRefCount(argv[1]);
 
+    //aof非关闭则保存del操作到aof中
     if (server.aof_state != AOF_OFF)
-        feedAppendOnlyFile(server.delCommand,db->id,argv,2);
+        feedAppendOnlyFile(server.delCommand,db->id,argv,2); //将del命令保存到aof文件
+    //发送del命令到从节点
     replicationFeedSlaves(server.slaves,db->id,argv,2);
 
     decrRefCount(argv[0]);
@@ -1127,12 +1142,15 @@ void propagateExpire(redisDb *db, robj *key, int lazy) {
 }
 
 /* Check if the key is expired. */
+//检查key是否过期  0:未过期 1:已过期
 int keyIsExpired(redisDb *db, robj *key) {
     mstime_t when = getExpire(db,key);
 
+    //key没有设置过期时间
     if (when < 0) return 0; /* No expire for this key */
 
     /* Don't expire anything while loading. It will be done later. */
+    //是否正在加载pdb/aof
     if (server.loading) return 0;
 
     /* If we are in the context of a Lua script, we pretend that time is
@@ -1140,6 +1158,7 @@ int keyIsExpired(redisDb *db, robj *key) {
      * only the first time it is accessed and not in the middle of the
      * script execution, making propagation to slaves / AOF consistent.
      * See issue #1525 on Github for more information. */
+    //lua环境中，保证执行过程中不会过期
     mstime_t now = server.lua_caller ? server.lua_time_start : mstime();
 
     return now > when;
@@ -1164,7 +1183,13 @@ int keyIsExpired(redisDb *db, robj *key) {
  *
  * The return value of the function is 0 if the key is still valid,
  * otherwise the function returns 1 if the key is expired. */
+//key有效返回0，过期返回1
+//1.判断key是否过期
+//2.如果是主节点 广播过期key的del操作到AOF file与从节点
+//3.发送事件通知
+//4.同步(异步)释放kv
 int expireIfNeeded(redisDb *db, robj *key) {
+    //检查key是否过期
     if (!keyIsExpired(db,key)) return 0;
 
     /* If we are running in the context of a slave, instead of
@@ -1175,13 +1200,17 @@ int expireIfNeeded(redisDb *db, robj *key) {
      * Still we try to return the right information to the caller,
      * that is, 0 if we think the key should be still valid, 1 if
      * we think the key is expired at this time. */
+    //从节点 会通过同步主节点的del操作来删除过期key
     if (server.masterhost != NULL) return 1;
 
     /* Delete the key */
     server.stat_expiredkeys++;
+    //主节点广播过期key的del操作到AOF file与从节点
     propagateExpire(db,key,server.lazyfree_lazy_expire);
+    //发送事件
     notifyKeyspaceEvent(NOTIFY_EXPIRED,
         "expired",key,db->id);
+    //释放kv
     return server.lazyfree_lazy_expire ? dbAsyncDelete(db,key) :
                                          dbSyncDelete(db,key);
 }

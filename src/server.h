@@ -605,12 +605,19 @@ typedef struct RedisModuleDigest {
 
 #define OBJ_SHARED_REFCOUNT INT_MAX
 typedef struct redisObject {
-    unsigned type:4;
-    unsigned encoding:4;
+    //类型 string list
+    unsigned type:4; //4bit
+    //编码方式
+    unsigned encoding:4;  //4bit
+    //24bit
+    //LRU:最近最少使用(首先淘汰最长时间未被使用)
+    //LFU:最近最不常用(淘汰一定时期内被访问次数最少) 前16bit记录访问时间，后8bit记录访问次数
     unsigned lru:LRU_BITS; /* LRU time (relative to global lru_clock) or
                             * LFU data (least significant 8 bits frequency
                             * and most significant 16 bits access time). */
+    //引用次数
     int refcount;
+    //指向具体的值
     void *ptr;
 } robj;
 
@@ -639,8 +646,9 @@ typedef struct clientReplyBlock {
  * database. The database number is the 'id' field in the structure. */
 //redis数据库结构
 typedef struct redisDb {
-    //kv
+    //kv字典
     dict *dict;                 /* The keyspace for this DB */
+    //过期键字典
     dict *expires;              /* Timeout of keys with a timeout set */
     //BLPOP时阻塞的key
     dict *blocking_keys;        /* Keys with clients waiting for data (BLPOP)*/
@@ -762,6 +770,7 @@ typedef struct client {
     int flags;              /* Client flags: CLIENT_* macros. */
     //是否认证过
     int authenticated;      /* When requirepass is non-NULL. */
+    //从节点状态  SLAVE_STATE_WAIT_BGSAVE_START SLAVE_STATE_WAIT_BGSAVE_END...
     int replstate;          /* Replication state if this is a slave. */
     int repl_put_online_on_ack; /* Install slave write handler on ACK. */
     int repldbfd;           /* Replication DB file descriptor. */
@@ -968,7 +977,7 @@ struct redisServer {
     int config_hz;              /* Configured HZ value. May be different than
                                    the actual 'hz' field value if dynamic-hz
                                    is enabled. */
-    //定时任务频率
+    //定时任务频率  1s执行多少次
     int hz;                     /* serverCron() calls frequency in hertz */
     //redis 数据库
     redisDb *db;
@@ -1026,6 +1035,7 @@ struct redisServer {
     list *clients;              /* List of active clients */
     list *clients_to_close;     /* Clients to close asynchronously */
     list *clients_pending_write; /* There is to write or install handler. */
+    //slaves从节点
     list *slaves, *monitors;    /* List of slaves and MONITORs */
     //server当前在处理的client
     client *current_client; /* Current client, only used on crash report */
@@ -1058,6 +1068,7 @@ struct redisServer {
     long long stat_numcommands;     /* Number of processed commands */
     //连接的client数量
     long long stat_numconnections;  /* Number of connections received */
+    //统计过期key的数量
     long long stat_expiredkeys;     /* Number of expired keys */
     double stat_expired_stale_perc; /* Percentage of keys probably expired */
     long long stat_expired_time_cap_reached_count; /* Early expire cylce stops.*/
@@ -1142,6 +1153,7 @@ struct redisServer {
     off_t aof_current_size;         /* AOF current size. */
     off_t aof_fsync_offset;         /* AOF offset which is already synced to disk. */
     int aof_rewrite_scheduled;      /* Rewrite once BGSAVE terminates. */
+    //aof重写进程的pid
     pid_t aof_child_pid;            /* PID if rewriting process */
     //aof重写时记录变换的数据缓冲
     list *aof_rewrite_buf_blocks;   /* Hold changes during an AOF rewrite. */
@@ -1149,6 +1161,7 @@ struct redisServer {
     sds aof_buf;      /* AOF buffer, written before entering the event loop */
     //aof文件描述符
     int aof_fd;       /* File descriptor of currently selected AOF file */
+    //aof当前选择的db
     int aof_selected_db; /* Currently selected DB in AOF */
     time_t aof_flush_postponed_start; /* UNIX time of postponed AOF flush */
     time_t aof_last_fsync;            /* UNIX time of last fsync() */
@@ -1164,6 +1177,7 @@ struct redisServer {
     int aof_load_truncated;         /* Don't stop on unexpected AOF EOF. */
     int aof_use_rdb_preamble;       /* Use RDB preamble on AOF rewrites. */
     /* AOF pipes used to communicate between parent and child during rewrite. */
+    // aof写数据到从节点文件描述符fd
     int aof_pipe_write_data_to_child;
     int aof_pipe_read_data_from_parent;
     int aof_pipe_write_ack_to_parent;
@@ -1174,9 +1188,10 @@ struct redisServer {
                                       to child process. */
     sds aof_child_diff;             /* AOF diff accumulator child side. */
     /* RDB persistence */
-    //上次保存后db数据是否发生了变换
+    //发生变化的key数量
     long long dirty;                /* Changes to DB from the last save */
     long long dirty_before_bgsave;  /* Used to restore dirty on failed BGSAVE */
+    //保存rdb的进行pid
     pid_t rdb_child_pid;            /* PID of RDB saving child */
     struct saveparam *saveparams;   /* Save points array for RDB */
     //rdb save的条件有几种
@@ -1214,15 +1229,21 @@ struct redisServer {
     /* Replication (master) */
     char replid[CONFIG_RUN_ID_SIZE+1];  /* My current replication ID. */
     char replid2[CONFIG_RUN_ID_SIZE+1]; /* replid inherited from master*/
+    //backlog缓冲中写到的位置
     long long master_repl_offset;   /* My current replication offset */
     long long second_replid_offset; /* Accept offsets up to this for replid2. */
     int slaveseldb;                 /* Last SELECTed DB in replication output */
     int repl_ping_slave_period;     /* Master pings the slave every N seconds */
+    //部分复制
     char *repl_backlog;             /* Replication backlog for partial syncs */
+    //backlog缓冲大小
     long long repl_backlog_size;    /* Backlog circular buffer size */
+    //backlog缓冲中数据长度
     long long repl_backlog_histlen; /* Backlog actual data length */
+    //backlog缓冲中下次写的位置
     long long repl_backlog_idx;     /* Backlog circular buffer current offset,
                                        that is the next byte will'll write to.*/
+    //backlog缓冲中可以开始读的位置
     long long repl_backlog_off;     /* Replication "master offset" of first
                                        byte in the replication backlog buffer.*/
     time_t repl_backlog_time_limit; /* Time without slaves after the backlog
@@ -1236,6 +1257,7 @@ struct redisServer {
     int repl_diskless_sync_delay;   /* Delay to start a diskless repl BGSAVE. */
     /* Replication (slave) */
     char *masterauth;               /* AUTH with this password with master */
+    //主节点  当前是从节点才会有值
     char *masterhost;               /* Hostname of master */
     int masterport;                 /* Port of master */
     int repl_timeout;               /* Timeout after N seconds of master idle */
@@ -1251,6 +1273,7 @@ struct redisServer {
     char *repl_transfer_tmpfile; /* Slave-> master SYNC temp file name */
     time_t repl_transfer_lastio; /* Unix time of the latest read, for timeout */
     int repl_serve_stale_data; /* Serve stale data when link is down? */
+    //slave是否是只读
     int repl_slave_ro;          /* Slave is read only? */
     int repl_slave_ignore_maxmemory;    /* If true slaves do not evict. */
     time_t repl_down_since; /* Unix time at which link with master went down */
@@ -1276,6 +1299,7 @@ struct redisServer {
     unsigned int maxclients;            /* Max number of simultaneous clients */
     //最大内存 32机器默认3GB
     unsigned long long maxmemory;   /* Max number of memory bytes to use */
+    //key过期策略
     int maxmemory_policy;           /* Policy for key eviction */
     int maxmemory_samples;          /* Pricision of random sampling */
     int lfu_log_factor;             /* LFU logarithmic counter factor. */
@@ -1340,10 +1364,12 @@ struct redisServer {
     /* Scripting */
     lua_State *lua; /* The Lua interpreter. We use just one for all clients */
     client *lua_client;   /* The "fake client" to query Redis from Lua */
+    //lua
     client *lua_caller;   /* The client running EVAL right now, or NULL */
     dict *lua_scripts;         /* A dictionary of SHA1 -> Lua scripts */
     unsigned long long lua_scripts_mem;  /* Cached scripts' memory + oh */
     mstime_t lua_time_limit;  /* Script timeout in milliseconds */
+    //lua脚本执行时间 ms
     mstime_t lua_time_start;  /* Start time of script, milliseconds time */
     int lua_write_dirty;  /* True if a write command was called during the
                              execution of the current script. */
@@ -1358,7 +1384,9 @@ struct redisServer {
     int lua_always_replicate_commands; /* Default replication type. */
     /* Lazy free */
     int lazyfree_lazy_eviction;
+    //是否延迟释放过期的key对应的值对象
     int lazyfree_lazy_expire;
+    //是否延迟删除key对应的值对象
     int lazyfree_lazy_server_del;
     /* Latency monitor */
     //延迟监控触发阀值

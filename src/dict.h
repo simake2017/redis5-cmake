@@ -44,14 +44,20 @@
 /* Unused arguments generate annoying warnings... */
 #define DICT_NOTUSED(V) ((void) V)
 
+//hash table中的entry
 typedef struct dictEntry {
+    //key
     void *key;
+    //值
     union {
         void *val;
+        //无符号
         uint64_t u64;
+        //有符号
         int64_t s64;
         double d;
     } v;
+    //下一个entry
     struct dictEntry *next;
 } dictEntry;
 
@@ -69,18 +75,27 @@ typedef struct dictType {
 
 /* This is our hash table structure. Every dictionary has two of this as we
  * implement incremental rehashing, for the old to the new table. */
+//字典的hash表
 typedef struct dictht {
+    //hash table 存储数据
     dictEntry **table;
+    //hash table长度 2^n
     unsigned long size;
+    //hash table长度的掩码  2^n-1
     unsigned long sizemask;
+    //已经使用多少
     unsigned long used;
 } dictht;
 
 typedef struct dict {
+    //dic表的方法  eg.获取key的hash,比较key...
     dictType *type;
     void *privdata;
+    //hash表，一个ht[0]->ht[1]实现rehash
     dictht ht[2];
+    //hash表中扩容到哪个槽了 -1:表示没有在扩容
     long rehashidx; /* rehashing not in progress if rehashidx == -1 */
+    //正在遍历字典表的需求有多少个
     unsigned long iterators; /* number of iterators currently running */
 } dict;
 

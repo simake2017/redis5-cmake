@@ -75,8 +75,11 @@ unsigned int getLRUClock(void) {
  * If the current resolution is lower than the frequency we refresh the
  * LRU clock (as it should be in production servers) we return the
  * precomputed value, otherwise we need to resort to a system call. */
+//获取LRU时间,如果当前服务器时间的精度低于LRU时钟，则使用系统时间重新计算
 unsigned int LRU_CLOCK(void) {
     unsigned int lruclock;
+    //1000/server.hz执行一次需要多少毫秒
+    //定时任务的频率>LRU的要求,这直接使用服务器时间减小开销
     if (1000/server.hz <= LRU_CLOCK_RESOLUTION) {
         atomicGet(server.lruclock,lruclock);
     } else {
@@ -296,7 +299,9 @@ void evictionPoolPopulate(int dbid, dict *sampledict, dict *keydict, struct evic
 /* Return the current time in minutes, just taking the least significant
  * 16 bits. The returned time is suitable to be stored as LDT (last decrement
  * time) for the LFU implementation. */
+//获取当前时间(分钟) 只获取后16字节
 unsigned long LFUGetTimeInMinutes(void) {
+    //server.unixtime减少系统调用
     return (server.unixtime/60) & 65535;
 }
 

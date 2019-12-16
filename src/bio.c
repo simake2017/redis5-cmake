@@ -128,6 +128,7 @@ void bioInit(void) {
     }
 }
 
+//创建一个job
 void bioCreateBackgroundJob(int type, void *arg1, void *arg2, void *arg3) {
     struct bio_job *job = zmalloc(sizeof(*job));
 
@@ -135,10 +136,14 @@ void bioCreateBackgroundJob(int type, void *arg1, void *arg2, void *arg3) {
     job->arg1 = arg1;
     job->arg2 = arg2;
     job->arg3 = arg3;
+    //获取锁
     pthread_mutex_lock(&bio_mutex[type]);
     listAddNodeTail(bio_jobs[type],job);
+    //待处理任务+1
     bio_pending[type]++;
+    //通知阻塞的线程有数据来了
     pthread_cond_signal(&bio_newjob_cond[type]);
+    //释放锁
     pthread_mutex_unlock(&bio_mutex[type]);
 }
 

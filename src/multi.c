@@ -290,6 +290,7 @@ void unwatchAllKeys(client *c) {
 
 /* "Touch" a key, so that if this key is being WATCHed by some client the
  * next EXEC will fail. */
+// 如果监听的key发生变化则将所的client打上CLIENT_DIRTY_CAS标记
 void touchWatchedKey(redisDb *db, robj *key) {
     list *clients;
     listIter li;
