@@ -1000,6 +1000,7 @@ struct redisServer {
     //lru时钟
     unsigned int lruclock;      /* Clock for LRU eviction */
     int shutdown_asap;          /* SHUTDOWN needed ASAP */
+    //serverCorn中是否进行rehash
     int activerehashing;        /* Incremental rehash in serverCron() */
     int active_defrag_running;  /* Active defragmentation running (holds current scan aggressiveness) */
     //密码或NULL
@@ -1165,14 +1166,17 @@ struct redisServer {
     //aof保存方式
     int aof_fsync;                  /* Kind of fsync() policy */
     char *aof_filename;             /* Name of the AOF file */
-    //
+    //aof重写时不要进行fsync
     int aof_no_fsync_on_rewrite;    /* Don't fsync if a rewrite is in prog. */
     //aof增长大于xM则重写
     int aof_rewrite_perc;           /* Rewrite AOF if % growth is > M and... */
     off_t aof_rewrite_min_size;     /* the AOF file is at least N bytes. */
     off_t aof_rewrite_base_size;    /* AOF size on latest startup or rewrite. */
+    //aof文件大小
     off_t aof_current_size;         /* AOF current size. */
+    //aof同步到磁盘的数据位置
     off_t aof_fsync_offset;         /* AOF offset which is already synced to disk. */
+    //用户执行了bgsave命令 serverCorn中会触发aof重写操作
     int aof_rewrite_scheduled;      /* Rewrite once BGSAVE terminates. */
     //aof重写进程的pid
     pid_t aof_child_pid;            /* PID if rewriting process */
@@ -1184,15 +1188,20 @@ struct redisServer {
     int aof_fd;       /* File descriptor of currently selected AOF file */
     //aof当前选择的db
     int aof_selected_db; /* Currently selected DB in AOF */
+    //前一个fsync任务还没完成，记录推迟aof fsync的时间
     time_t aof_flush_postponed_start; /* UNIX time of postponed AOF flush */
+    //最后一次进行aof fsync的时间
     time_t aof_last_fsync;            /* UNIX time of last fsync() */
     time_t aof_rewrite_time_last;   /* Time used by last AOF rewrite run. */
     time_t aof_rewrite_time_start;  /* Current AOF rewrite start time. */
     int aof_lastbgrewrite_status;   /* C_OK or C_ERR */
+    //延迟执行aof sync的次数
     unsigned long aof_delayed_fsync;  /* delayed AOF fsync() counter */
     int aof_rewrite_incremental_fsync;/* fsync incrementally while aof rewriting? */
     int rdb_save_incremental_fsync;   /* fsync incrementally while rdb saving? */
+    //aof最新写入状态
     int aof_last_write_status;      /* C_OK or C_ERR */
+    //记录最新一次写aof发生的错误
     int aof_last_write_errno;       /* Valid if aof_last_write_status is ERR */
     //是否跳过aof异常结尾
     int aof_load_truncated;         /* Don't stop on unexpected AOF EOF. */
@@ -1353,7 +1362,7 @@ struct redisServer {
     int list_max_ziplist_size;
     int list_compress_depth;
     /* time cache */
-    //配置更新时间 m
+    //时间戳 m
     time_t unixtime;    /* Unix time sampled every cron cycle. */
     time_t timezone;    /* Cached timezone. As set by tzset(). */
     int daylight_active;    /* Currently in daylight saving time. */

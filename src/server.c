@@ -731,6 +731,7 @@ dictType replScriptCacheDictType = {
     NULL                        /* val destructor */
 };
 
+//当使用率低于10%时重新设置字典大小
 int htNeedsResize(dict *dict) {
     long long size, used;
 
@@ -742,6 +743,7 @@ int htNeedsResize(dict *dict) {
 
 /* If the percentage of used slots in the HT reaches HASHTABLE_MIN_FILL
  * we resize the hash table to save memory */
+//如果字典的空间使用率低于10%则收缩字典空间
 void tryResizeHashTables(int dbid) {
     if (htNeedsResize(server.db[dbid].dict))
         dictResize(server.db[dbid].dict);
@@ -756,6 +758,7 @@ void tryResizeHashTables(int dbid) {
  *
  * The function returns 1 if some rehashing was performed, otherwise 0
  * is returned. */
+//rehash
 int incrementallyRehash(int dbid) {
     /* Keys dictionary */
     if (dictIsRehashing(server.db[dbid].dict)) {
@@ -1004,11 +1007,14 @@ void clientsCron(void) {
 /* This function handles 'background' operations we are required to do
  * incrementally in Redis databases, such as active key expiring, resizing,
  * rehashing. */
+//db相关的操作 移除过期key,收缩字典表,rehash
 void databasesCron(void) {
     /* Expire keys by random sampling. Not required for slaves
      * as master will synthesize DELs for us. */
+    //移除过期的key
     if (server.active_expire_enabled) {
         if (server.masterhost == NULL) {
+            //遍历移除过期的key,根据不同的类型设置不同的时间阈值
             activeExpireCycle(ACTIVE_EXPIRE_CYCLE_SLOW);
         } else {
             expireSlaveKeys();
@@ -1016,16 +1022,19 @@ void databasesCron(void) {
     }
 
     /* Defrag keys gradually. */
+    //碎片整理
     if (server.active_defrag_enabled)
         activeDefragCycle();
 
     /* Perform hash tables rehashing if needed, but only if there are no
      * other processes saving the DB on disk. Otherwise rehashing is bad
      * as will cause a lot of copy-on-write of memory pages. */
+    //rehash过程中不能进销aof或rdb操作
     if (server.rdb_child_pid == -1 && server.aof_child_pid == -1) {
         /* We use global counters so if we stop the computation at a given
          * DB we'll be able to start from the successive in the next
          * cron loop iteration. */
+        //静态变量
         static unsigned int resize_db = 0;
         static unsigned int rehash_db = 0;
         int dbs_per_call = CRON_DBS_PER_CALL;
@@ -1227,10 +1236,12 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     clientsCron();
 
     /* Handle background operations on Redis databases. */
+    //db相关的操作 移除过期key,收缩字典表,rehash
     databasesCron();
 
     /* Start a scheduled AOF rewrite if this was requested by the user while
      * a BGSAVE was in progress. */
+    //bgsave命令触发
     if (server.rdb_child_pid == -1 && server.aof_child_pid == -1 &&
         server.aof_rewrite_scheduled)
     {
@@ -1424,6 +1435,7 @@ void beforeSleep(struct aeEventLoop *eventLoop) {
         processUnblockedClients(); //处理客户端的命令
 
     /* Write the AOF buffer on disk */
+    //写aof buf到磁盘
     flushAppendOnlyFile(0);
 
     /* Handle writes with pending output buffers. */
