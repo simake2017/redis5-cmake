@@ -659,6 +659,7 @@ typedef struct redisDb {
     dict *watched_keys;         /* WATCHED keys for MULTI/EXEC CAS */
     //从0开始 数据库编号
     int id;                     /* Database ID */
+    //平均过期时间
     long long avg_ttl;          /* Average TTL, just for stats */
     list *defrag_later;         /* List of key names to attempt to defrag one by one, gradually. */
 } redisDb;
@@ -761,8 +762,11 @@ typedef struct client {
     long bulklen;           /* Length of bulk argument in multi bulk request. */
     //响应数据链表
     list *reply;            /* List of reply objects to send to the client. */
-    //响应数据链表中总字节数
+    //响应数据链表中总缓冲大小
     unsigned long long reply_bytes; /* Tot bytes of objects in reply list. */
+    //当前buf缓冲中已经发送的字节或当前reply的节点缓冲中已经发送的字节
+    //如果一次响应中还有数据没有写完 则sentlen会大于0,下次响应接着使用
+    //只有一次响应中数据写完后才会设置为0
     size_t sentlen;         /* Amount of bytes already sent in the current
                                buffer or object being sent. */
     time_t ctime;           /* Client creation time. */
@@ -1043,14 +1047,16 @@ struct redisServer {
     list *clients;              /* List of active clients */
     //异步关闭的client链表
     list *clients_to_close;     /* Clients to close asynchronously */
-    //等待写的client链表
+    //等待写的client链表(返回数据)
     list *clients_pending_write; /* There is to write or install handler. */
     //slaves从节点
     list *slaves, *monitors;    /* List of slaves and MONITORs */
     //server当前在处理的client
     client *current_client; /* Current client, only used on crash report */
     rax *clients_index;         /* Active clients dictionary by client ID. */
+    //客户端暂停
     int clients_paused;         /* True if clients are currently paused */
+    //客户端暂停取消到什么时候取消
     mstime_t clients_pause_end_time; /* Time when we undo clients_paused */
     char neterr[ANET_ERR_LEN];   /* Error buffer for anet.c */
     dict *migrate_cached_sockets;/* MIGRATE cached sockets */
@@ -1080,7 +1086,9 @@ struct redisServer {
     long long stat_numconnections;  /* Number of connections received */
     //统计过期key的数量
     long long stat_expiredkeys;     /* Number of expired keys */
+    //预估的过期key的百分比
     double stat_expired_stale_perc; /* Percentage of keys probably expired */
+    //遍历过期key的循环因为时间到期而退出的次数
     long long stat_expired_time_cap_reached_count; /* Early expire cylce stops.*/
     long long stat_evictedkeys;     /* Number of evicted keys (maxmemory) */
     long long stat_keyspace_hits;   /* Number of successful lookups of keys */
@@ -1110,6 +1118,7 @@ struct redisServer {
     struct malloc_stats cron_malloc_stats; /* sampled in serverCron(). */
     //统计总共接收的字节数
     long long stat_net_input_bytes; /* Bytes read from network. */
+    //统计返回给客户的字节数
     long long stat_net_output_bytes; /* Bytes written to network. */
     size_t stat_rdb_cow_bytes;      /* Copy on write bytes during RDB saving. */
     size_t stat_aof_cow_bytes;      /* Copy on write bytes during AOF rewrite. */
@@ -1128,7 +1137,7 @@ struct redisServer {
     int maxidletime;                /* Client timeout in seconds */
     // tcp keepalive
     int tcpkeepalive;
-    //过期开关
+    //开启删除过期key循环功能的开关
     int active_expire_enabled;      /* Can be disabled for testing purposes. */
     //碎片整理
     int active_defrag_enabled;
@@ -1322,6 +1331,7 @@ struct redisServer {
     //阻塞的client数量
     unsigned int blocked_clients;   /* # of clients executing a blocking cmd.*/
     unsigned int blocked_clients_by_type[BLOCKED_NUM];
+    //存储解除阻塞的client链表
     list *unblocked_clients; /* list of clients to unblock before next loop */
     list *ready_keys;        /* List of readyList structures for BLPOP & co */
     /* Sort parameters - qsort_r() is only available under BSD so we
@@ -1347,7 +1357,7 @@ struct redisServer {
     time_t unixtime;    /* Unix time sampled every cron cycle. */
     time_t timezone;    /* Cached timezone. As set by tzset(). */
     int daylight_active;    /* Currently in daylight saving time. */
-    //配置更新时间 ms
+    //当前时间
     long long mstime;   /* Like 'unixtime' but with milliseconds resolution. */
     /* Pubsub */
     dict *pubsub_channels;  /* Map channels to list of subscribed clients */
@@ -1401,8 +1411,9 @@ struct redisServer {
     //是否延迟删除key对应的值对象
     int lazyfree_lazy_server_del;
     /* Latency monitor */
-    //延迟监控触发阀值
+    //延迟监控触发阀值 0不触发
     long long latency_monitor_threshold;
+    //记录触发的延迟事件
     dict *latency_events;
     /* Assert & bug reporting */
     const char *assert_failed;

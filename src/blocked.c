@@ -148,9 +148,12 @@ void processUnblockedClients(void) {
  * 4. With this function instead we can put the client in a queue that will
  *    process it for queries ready to be executed at a safe time.
  */
+//将解除阻塞状态的client放到一个队列在合适的时间尽快处理
+//client被暂停时可能接收到了数据需要尽快处理，如果没有记录这些client,要等到下次读事件触发时才能进行处理
 void queueClientForReprocessing(client *c) {
     /* The client may already be into the unblocked list because of a previous
      * blocking operation, don't add back it into the list multiple times. */
+    //已经添加到unblocked_clients链表不在重复添加
     if (!(c->flags & CLIENT_UNBLOCKED)) {
         c->flags |= CLIENT_UNBLOCKED;
         listAddNodeTail(server.unblocked_clients,c);

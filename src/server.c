@@ -1388,6 +1388,9 @@ void beforeSleep(struct aeEventLoop *eventLoop) {
 
     /* Run a fast expire cycle (the called function will return
      * ASAP if a fast cycle is not needed). */
+    //功能开关开启&&主节点
+    //检查是否已经到达暂停时间，如果到达则将client放到unblocked_clients队列中
+    //遍历移除过期的key,根据不同的类型设置不同的时间阈值
     if (server.active_expire_enabled && server.masterhost == NULL)
         activeExpireCycle(ACTIVE_EXPIRE_CYCLE_FAST);
 
@@ -1416,13 +1419,15 @@ void beforeSleep(struct aeEventLoop *eventLoop) {
     moduleHandleBlockedClients();
 
     /* Try to process pending commands for clients that were just unblocked. */
+    //处理刚刚放入到unblocked_clients队列中的客户端
     if (listLength(server.unblocked_clients))
-        processUnblockedClients();
+        processUnblockedClients(); //处理客户端的命令
 
     /* Write the AOF buffer on disk */
     flushAppendOnlyFile(0);
 
     /* Handle writes with pending output buffers. */
+    //将数据返回给客户端
     handleClientsWithPendingWrites();
 
     /* Before we are going to sleep, let the threads access the dataset by
@@ -1764,6 +1769,7 @@ void initServerConfig(void) {
     server.slowlog_max_len = CONFIG_DEFAULT_SLOWLOG_MAX_LEN;
 
     /* Latency monitor */
+    //延迟监控触发的阈值
     server.latency_monitor_threshold = CONFIG_DEFAULT_LATENCY_MONITOR_THRESHOLD;
 
     /* Debugging */

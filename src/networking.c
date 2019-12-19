@@ -1003,11 +1003,15 @@ client *lookupClientByID(uint64_t id) {
 /* Write data in output buffers to client. Return C_OK if the client
  * is still valid after the call, C_ERR if it was freed. */
 int writeToClient(int fd, client *c, int handler_installed) {
+    //totwritten:总共写了多少字节
+    //nwritten:新写了多少字节
     ssize_t nwritten = 0, totwritten = 0;
     size_t objlen;
     clientReplyBlock *o;
 
+    //有数据需要发送到客户端
     while(clientHasPendingReplies(c)) {
+        //先返回buf中的数据
         if (c->bufpos > 0) {
             nwritten = write(fd,c->buf+c->sentlen,c->bufpos-c->sentlen);
             if (nwritten <= 0) break;
@@ -1016,14 +1020,16 @@ int writeToClient(int fd, client *c, int handler_installed) {
 
             /* If the buffer was sent, set bufpos to zero to continue with
              * the remainder of the reply. */
+            //buf中数据已经发送完,重置
             if ((int)c->sentlen == c->bufpos) {
                 c->bufpos = 0;
                 c->sentlen = 0;
             }
-        } else {
+        } else {  //发送队列中的数据
             o = listNodeValue(listFirst(c->reply));
             objlen = o->used;
 
+            //当前节点缓冲没有被使用
             if (objlen == 0) {
                 c->reply_bytes -= o->size;
                 listDelNode(c->reply,listFirst(c->reply));
@@ -1036,6 +1042,7 @@ int writeToClient(int fd, client *c, int handler_installed) {
             totwritten += nwritten;
 
             /* If we fully sent the object on head go to the next one */
+            //当前节点中的缓冲数据已经发送完成
             if (c->sentlen == objlen) {
                 c->reply_bytes -= o->size;
                 listDelNode(c->reply,listFirst(c->reply));
@@ -1058,6 +1065,8 @@ int writeToClient(int fd, client *c, int handler_installed) {
          * Moreover, we also send as much as possible if the client is
          * a slave (otherwise, on high-speed traffic, the replication
          * buffer will grow indefinitely) */
+        //超过64k的响应数据 下次在返回
+        //如果使用内存超过最大内存或是从节点则尽可能输出数据
         if (totwritten > NET_MAX_WRITES_PER_EVENT &&
             (server.maxmemory == 0 ||
              zmalloc_used_memory() < server.maxmemory) &&
@@ -1079,13 +1088,17 @@ int writeToClient(int fd, client *c, int handler_installed) {
          * as an interaction, since we always send REPLCONF ACK commands
          * that take some time to just fill the socket output buffer.
          * We just rely on data / pings received for timeout detection. */
+        //更新client与server的最后交互时间
         if (!(c->flags & CLIENT_MASTER)) c->lastinteraction = server.unixtime;
     }
+    //数据已经返回完成
     if (!clientHasPendingReplies(c)) {
+        //重置记录响应位置的offset
         c->sentlen = 0;
         if (handler_installed) aeDeleteFileEvent(server.el,c->fd,AE_WRITABLE);
 
         /* Close connection after entire reply has been sent. */
+        //CLIENT_CLOSE_AFTER_REPLY 响应完成后关闭客户端
         if (c->flags & CLIENT_CLOSE_AFTER_REPLY) {
             freeClient(c);
             return C_ERR;
@@ -1105,6 +1118,8 @@ void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask) {
  * we can just write the replies to the client output buffer without any
  * need to use a syscall in order to install the writable event handler,
  * get it called, and so forth. */
+// 进入下次事件循环之前调用(before)
+// 将数据返回给客户端
 int handleClientsWithPendingWrites(void) {
     listIter li;
     listNode *ln;
@@ -1118,13 +1133,16 @@ int handleClientsWithPendingWrites(void) {
 
         /* If a client is protected, don't do anything,
          * that may trigger write error or recreate handler. */
+        //受保护的客户端跳过
         if (c->flags & CLIENT_PROTECTED) continue;
 
         /* Try to write buffers to the client socket. */
+        //将数据返回给客户端
         if (writeToClient(c->fd,c,0) == C_ERR) continue;
 
         /* If after the synchronous writes above we still have data to
          * output to the client, we need to install the writable handler. */
+        //如果数据没有一次发送完成,则需要订阅客户端的write事件,下次进行处理
         if (clientHasPendingReplies(c)) {
             int ae_flags = AE_WRITABLE;
             /* For the fsync=always policy, we want that a given FD is never
@@ -1132,6 +1150,8 @@ int handleClientsWithPendingWrites(void) {
              * so that in the middle of receiving the query, and serving it
              * to the client, we'll call beforeSleep() that will do the
              * actual fsync of AOF to disk. AE_BARRIER ensures that. */
+            //fsync aof开启
+            //如果一个事件循环中读写事件都触发优先处理写事件
             if (server.aof_state == AOF_ON &&
                 server.aof_fsync == AOF_FSYNC_ALWAYS)
             {
@@ -2246,7 +2266,10 @@ void pauseClients(mstime_t end) {
 
 /* Return non-zero if clients are currently paused. As a side effect the
  * function checks if the pause time was reached and clear it. */
+//1 clients处于暂停状态
+//检查是否已经到达暂停时间，如果到达则将client放到unblocked_clients队列中
 int clientsArePaused(void) {
+    //客户端暂停&&暂停时间已到
     if (server.clients_paused &&
         server.clients_pause_end_time < server.mstime)
     {
@@ -2264,6 +2287,7 @@ int clientsArePaused(void) {
 
             /* Don't touch slaves and blocked clients.
              * The latter pending requests will be processed when unblocked. */
+            //CLIENT_SLAVE|CLIENT_BLOCKED 这些状态不处理
             if (c->flags & (CLIENT_SLAVE|CLIENT_BLOCKED)) continue;
             queueClientForReprocessing(c);
         }
