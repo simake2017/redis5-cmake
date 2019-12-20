@@ -1328,6 +1328,7 @@ static void setProtocolError(const char *errstr, client *c) {
  * This function is called if processInputBuffer() detects that the next
  * command is in RESP format, so the first byte in the command is found
  * to be '*'. Otherwise for inline commands processInlineBuffer() is called. */
+//解析客户端请求命令
 int processMultibulkBuffer(client *c) {
     char *newline = NULL;
     int ok;
@@ -1489,15 +1490,18 @@ void processInputBuffer(client *c) {
     /* Keep processing while there is something in the input buffer */
     while(c->qb_pos < sdslen(c->querybuf)) {
         /* Return if clients are paused. */
+        //客户端处于暂停状态
         if (!(c->flags & CLIENT_SLAVE) && clientsArePaused()) break;
 
         /* Immediately abort if the client is in the middle of something. */
+        // 客户端在进行阻塞操作
         if (c->flags & CLIENT_BLOCKED) break;
 
         /* Don't process input from the master while there is a busy script
          * condition on the slave. We want just to accumulate the replication
          * stream (instead of replying -BUSY like we do with other clients) and
          * later resume the processing. */
+        //服务端繁忙 先不处理客户端请求
         if (server.lua_timedout && c->flags & CLIENT_MASTER) break;
 
         /* CLIENT_CLOSE_AFTER_REPLY closes the connection once the reply is
@@ -1505,6 +1509,7 @@ void processInputBuffer(client *c) {
          * this flag has been set (i.e. don't process more commands).
          *
          * The same applies for clients we want to terminate ASAP. */
+        //标记了CLOSE标记的client不在处理请求 尽快关闭
         if (c->flags & (CLIENT_CLOSE_AFTER_REPLY|CLIENT_CLOSE_ASAP)) break;
 
         /* Determine request type when unknown. */
@@ -2106,8 +2111,10 @@ void rewriteClientCommandArgument(client *c, int i, robj *newval) {
  * Note: this function is very fast so can be called as many time as
  * the caller wishes. The main usage of this function currently is
  * enforcing the client output length limits. */
+//准备返回客户端的数据大小 字节
 unsigned long getClientOutputBufferMemoryUsage(client *c) {
     unsigned long list_item_size = sizeof(listNode) + sizeof(clientReplyBlock);
+    //数据大小+数据结构大小
     return c->reply_bytes + (list_item_size*listLength(c->reply));
 }
 

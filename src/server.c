@@ -837,7 +837,7 @@ int clientsCronHandleTimeout(client *c, mstime_t now_ms) {
         /* Blocked OPS timeout is handled with milliseconds resolution.
          * However note that the actual resolution is limited by
          * server.hz. */
-
+        // block操作超时
         if (c->bpop.timeout != 0 && c->bpop.timeout < now_ms) {
             /* Handle blocking operation specific timeout. */
             replyToBlockedClientTimedOut(c);
@@ -914,7 +914,9 @@ size_t ClientsPeakMemInput[CLIENTS_PEAK_MEM_USAGE_SLOTS];
 size_t ClientsPeakMemOutput[CLIENTS_PEAK_MEM_USAGE_SLOTS];
 
 int clientsCronTrackExpansiveClients(client *c) {
+    //请求命令的大小
     size_t in_usage = sdsAllocSize(c->querybuf);
+    //存储响应数据消耗的字节数
     size_t out_usage = getClientOutputBufferMemoryUsage(c);
     int i = server.unixtime % CLIENTS_PEAK_MEM_USAGE_SLOTS;
     int zeroidx = (i+1) % CLIENTS_PEAK_MEM_USAGE_SLOTS;
@@ -974,6 +976,7 @@ void clientsCron(void) {
      * function is called server.hz times per second, in the average case we
      * process all the clients in 1 second. */
     int numclients = listLength(server.clients);
+    //计算需要执行几次
     int iterations = numclients/server.hz;
     mstime_t now = mstime();
 
@@ -998,8 +1001,11 @@ void clientsCron(void) {
         /* The following functions do different service checks on the client.
          * The protocol is that they return non-zero if the client was
          * terminated. */
+        //server cron中处理客户端连接超时 阻塞操作超时
         if (clientsCronHandleTimeout(c,now)) continue;
+        //释放未使用的query buffer空间
         if (clientsCronResizeQueryBuffer(c)) continue;
+        //追踪客户端输入数据与输出数据的大小
         if (clientsCronTrackExpansiveClients(c)) continue;
     }
 }
@@ -1241,21 +1247,25 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
 
     /* Start a scheduled AOF rewrite if this was requested by the user while
      * a BGSAVE was in progress. */
-    //bgsave命令触发
+    // 没有aof与rdb操作 开始执行推迟的aof重写操作
     if (server.rdb_child_pid == -1 && server.aof_child_pid == -1 &&
         server.aof_rewrite_scheduled)
     {
+        //重写aof
         rewriteAppendOnlyFileBackground();
     }
 
     /* Check if a background saving or AOF rewrite in progress terminated. */
+    //是否有rdb或aof后台任务在进行
     if (server.rdb_child_pid != -1 || server.aof_child_pid != -1 ||
         ldbPendingChildren())
     {
         int statloc;
         pid_t pid;
 
+        //是否有子进程结束
         if ((pid = wait3(&statloc,WNOHANG,NULL)) != 0) {
+            //子进程退出码
             int exitcode = WEXITSTATUS(statloc);
             int bysignal = 0;
 
@@ -1271,8 +1281,9 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
                 backgroundSaveDoneHandler(exitcode,bysignal);
                 if (!bysignal && exitcode == 0) receiveChildInfo();
             } else if (pid == server.aof_child_pid) {
+                //aof重写子进程
                 backgroundRewriteDoneHandler(exitcode,bysignal);
-                if (!bysignal && exitcode == 0) receiveChildInfo();
+                if (!bysignal && exitcode == 0) receiveChildInfo(); //接收子进程传递到父进程的信息
             } else {
                 if (!ldbRemoveChild(pid)) {
                     serverLog(LL_WARNING,
@@ -1284,6 +1295,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
             closeChildInfoPipe();
         }
     } else {
+        //没有后台rdb与aof进程在进行 判断能否开启save/rewrite操作
         /* If there is not a background saving/rewrite in progress check if
          * we have to save/rewrite now. */
         for (j = 0; j < server.saveparamslen; j++) {
@@ -1328,21 +1340,25 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
 
     /* AOF postponed flush: Try at every cron cycle if the slow fsync
      * completed. */
+    //尝试执行延迟的aof写操作
     if (server.aof_flush_postponed_start) flushAppendOnlyFile(0);
 
     /* AOF write errors: in this case we have a buffer to flush as well and
      * clear the AOF error in case of success to make the DB writable again,
      * however to try every second is enough in case of 'hz' is set to
      * an higher frequency. */
+    //每1秒尝试执行发生错误的aof操作
     run_with_period(1000) {
         if (server.aof_last_write_status == C_ERR)
             flushAppendOnlyFile(0);
     }
 
     /* Close clients that need to be closed asynchronous */
+    //释放需要关闭的client
     freeClientsInAsyncFreeQueue();
 
     /* Clear the paused clients flag if needed. */
+    //尝试唤醒暂停的客户端
     clientsArePaused(); /* Don't check return value, just use the side effect.*/
 
     /* Replication cron function -- used to reconnect to master,
@@ -2264,6 +2280,7 @@ void initServer(void) {
     scriptingInit(1);
     //慢查询日志初始化
     slowlogInit();
+    //延迟监控初始化
     latencyMonitorInit();
     bioInit();
     //初始完成使用了多少字节内存
@@ -2508,6 +2525,7 @@ void preventCommandReplication(client *c) {
 void call(client *c, int flags) {
     long long dirty, start, duration;
     int client_old_flags = c->flags;
+    //解析后的客户端命令
     struct redisCommand *real_cmd = c->cmd;
 
     /* Sent the command to clients in MONITOR mode, only if the commands are
@@ -2528,6 +2546,7 @@ void call(client *c, int flags) {
     /* Call the command. */
     dirty = server.dirty;
     start = ustime();
+    //处理命令
     c->cmd->proc(c);
     duration = ustime()-start;
     dirty = server.dirty-dirty;
@@ -2550,6 +2569,7 @@ void call(client *c, int flags) {
 
     /* Log the command into the Slow log if needed, and populate the
      * per-command statistics that we show in INFO commandstats. */
+    //满查询日志统计
     if (flags & CMD_CALL_SLOWLOG && c->cmd->proc != execCommand) {
         char *latency_event = (c->cmd->flags & CMD_FAST) ?
                               "fast-command" : "command";
@@ -2634,6 +2654,7 @@ void call(client *c, int flags) {
  * If C_OK is returned the client is still alive and valid and
  * other operations can be performed by the caller. Otherwise
  * if C_ERR is returned the client was destroyed (i.e. after QUIT). */
+//处理客户端命令
 int processCommand(client *c) {
     moduleCallCommandFilters(c);
 
@@ -2731,6 +2752,7 @@ int processCommand(client *c) {
 
     /* Don't accept write commands if there are problems persisting on disk
      * and if this is a master instance. */
+    //磁盘有问题 在接受写操作
     int deny_write_type = writeCommandsDeniedByDiskError();
     if (deny_write_type != DISK_ERROR_TYPE_NONE &&
         server.masterhost == NULL &&
@@ -2818,6 +2840,8 @@ int processCommand(client *c) {
     }
 
     /* Exec the command */
+    //事务命令multi
+    //处于事务状态只能处理指定的命令
     if (c->flags & CLIENT_MULTI &&
         c->cmd->proc != execCommand && c->cmd->proc != discardCommand &&
         c->cmd->proc != multiCommand && c->cmd->proc != watchCommand)
@@ -2936,6 +2960,7 @@ int prepareForShutdown(int flags) {
  * DISK_ERROR_TYPE_AOF:     Don't accept writes: AOF errors.
  * DISK_ERROR_TYPE_RDB:     Don't accept writes: RDB errors.
  */
+//发生错误停止接收写命令
 int writeCommandsDeniedByDiskError(void) {
     if (server.stop_writes_on_bgsave_err &&
         server.saveparamslen > 0 &&
@@ -3957,10 +3982,12 @@ int checkForSentinelMode(int argc, char **argv) {
 void loadDataFromDisk(void) {
     long long start = ustime();
     if (server.aof_state == AOF_ON) {
+        //从磁盘加载aof文件
         if (loadAppendOnlyFile(server.aof_filename) == C_OK)
             serverLog(LL_NOTICE,"DB loaded from append only file: %.3f seconds",(float)(ustime()-start)/1000000);
     } else {
         rdbSaveInfo rsi = RDB_SAVE_INFO_INIT;
+        //从磁盘rdb加载数据
         if (rdbLoad(server.rdb_filename,&rsi) == C_OK) {
             serverLog(LL_NOTICE,"DB loaded from disk: %.3f seconds",
                 (float)(ustime()-start)/1000000);

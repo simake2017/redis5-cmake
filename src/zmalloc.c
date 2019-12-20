@@ -244,6 +244,7 @@ void zmalloc_set_oom_handler(void (*oom_handler)(size_t)) {
 #include <sys/stat.h>
 #include <fcntl.h>
 
+//Resident Set Size，指实际使用物理内存
 size_t zmalloc_get_rss(void) {
     int page = sysconf(_SC_PAGESIZE);
     size_t rss;

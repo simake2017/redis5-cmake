@@ -1068,14 +1068,19 @@ ssize_t rdbSaveAuxFieldStrInt(rio *rdb, char *key, long long val) {
 }
 
 /* Save a few default AUX fields with information about the RDB generated. */
+//保持保存信息到rdb辅助字段
 int rdbSaveInfoAuxFields(rio *rdb, int flags, rdbSaveInfo *rsi) {
     int redis_bits = (sizeof(void*) == 8) ? 64 : 32;
     int aof_preamble = (flags & RDB_SAVE_AOF_PREAMBLE) != 0;
 
     /* Add a few fields about the state when the RDB was created. */
+    //redis版本
     if (rdbSaveAuxFieldStrStr(rdb,"redis-ver",REDIS_VERSION) == -1) return -1;
+    //32位还是64位的机器
     if (rdbSaveAuxFieldStrInt(rdb,"redis-bits",redis_bits) == -1) return -1;
+    //当前时间戳
     if (rdbSaveAuxFieldStrInt(rdb,"ctime",time(NULL)) == -1) return -1;
+    //使用的内存
     if (rdbSaveAuxFieldStrInt(rdb,"used-mem",zmalloc_used_memory()) == -1) return -1;
 
     /* Handle saving options that generate aux fields. */
@@ -1087,6 +1092,7 @@ int rdbSaveInfoAuxFields(rio *rdb, int flags, rdbSaveInfo *rsi) {
         if (rdbSaveAuxFieldStrInt(rdb,"repl-offset",server.master_repl_offset)
             == -1) return -1;
     }
+    //aof与rdb混合持久化
     if (rdbSaveAuxFieldStrInt(rdb,"aof-preamble",aof_preamble) == -1) return -1;
     return 1;
 }
@@ -1107,10 +1113,14 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
     uint64_t cksum;
     size_t processed = 0;
 
+    // REDIS0009250
+
     if (server.rdb_checksum)
         rdb->update_cksum = rioGenericUpdateChecksum;
+    //魔数 REDIS0009
     snprintf(magic,sizeof(magic),"REDIS%04d",RDB_VERSION);
     if (rdbWriteRaw(rdb,magic,9) == -1) goto werr;
+    //写辅助字段信息 操作码RDB_OPCODE_AUX
     if (rdbSaveInfoAuxFields(rdb,flags,rsi) == -1) goto werr;
 
     for (j = 0; j < server.dbnum; j++) {
@@ -1120,7 +1130,9 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
         di = dictGetSafeIterator(d);
 
         /* Write the SELECT DB opcode */
+        //写select操作码
         if (rdbSaveType(rdb,RDB_OPCODE_SELECTDB) == -1) goto werr;
+        //写数据库编号
         if (rdbSaveLen(rdb,j) == -1) goto werr;
 
         /* Write the RESIZE DB opcode. We trim the size to UINT32_MAX, which
@@ -1130,6 +1142,7 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
         uint64_t db_size, expires_size;
         db_size = dictSize(db->dict);
         expires_size = dictSize(db->expires);
+        //kv 过期键数量
         if (rdbSaveType(rdb,RDB_OPCODE_RESIZEDB) == -1) goto werr;
         if (rdbSaveLen(rdb,db_size) == -1) goto werr;
         if (rdbSaveLen(rdb,expires_size) == -1) goto werr;
@@ -1142,15 +1155,18 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
 
             initStaticStringObject(key,keystr);
             expire = getExpire(db,&key);
+            //保存kv
             if (rdbSaveKeyValuePair(rdb,&key,o,expire) == -1) goto werr;
 
             /* When this RDB is produced as part of an AOF rewrite, move
              * accumulated diff from parent to child while rewriting in
              * order to have a smaller final write. */
+            //aof重写过程混合写rdb&&数据变换大于10kb
             if (flags & RDB_SAVE_AOF_PREAMBLE &&
                 rdb->processed_bytes > processed+AOF_READ_DIFF_INTERVAL_BYTES)
             {
                 processed = rdb->processed_bytes;
+                //从管道中读取新增的命令暂存
                 aofReadDiffFromParent();
             }
         }
@@ -1174,12 +1190,14 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
     }
 
     /* EOF opcode */
+    //rdb结束标识
     if (rdbSaveType(rdb,RDB_OPCODE_EOF) == -1) goto werr;
 
     /* CRC64 checksum. It will be zero if checksum computation is disabled, the
      * loading code skips the check in this case. */
     cksum = rdb->cksum;
     memrev64ifbe(&cksum);
+    //保持checksum
     if (rioWrite(rdb,&cksum,8) == 0) goto werr;
     return C_OK;
 
@@ -1238,6 +1256,7 @@ int rdbSave(char *filename, rdbSaveInfo *rsi) {
 
     rioInitWithFile(&rdb,fp);
 
+    //save rdb过程中是否增量进行fsync操作
     if (server.rdb_save_incremental_fsync)
         rioSetAutoSync(&rdb,REDIS_AUTOSYNC_BYTES);
 
@@ -1279,6 +1298,7 @@ werr:
     return C_ERR;
 }
 
+//保存数据到rdb
 int rdbSaveBackground(char *filename, rdbSaveInfo *rsi) {
     pid_t childpid;
     long long start;
@@ -1287,6 +1307,7 @@ int rdbSaveBackground(char *filename, rdbSaveInfo *rsi) {
 
     server.dirty_before_bgsave = server.dirty;
     server.lastbgsave_try = time(NULL);
+    //创建pipe
     openChildInfoPipe();
 
     start = ustime();
@@ -1296,6 +1317,7 @@ int rdbSaveBackground(char *filename, rdbSaveInfo *rsi) {
         /* Child */
         closeListeningSockets(0);
         redisSetProcTitle("redis-rdb-bgsave");
+        //保存db中的数据到rdb文件
         retval = rdbSave(filename,rsi);
         if (retval == C_OK) {
             size_t private_dirty = zmalloc_get_private_dirty(-1);
@@ -1312,6 +1334,7 @@ int rdbSaveBackground(char *filename, rdbSaveInfo *rsi) {
         exitFromChild((retval == C_OK) ? 0 : 1);
     } else {
         /* Parent */
+        //父进程
         server.stat_fork_time = ustime()-start;
         server.stat_fork_rate = (double) zmalloc_used_memory() * 1000000 / server.stat_fork_time / (1024*1024*1024); /* GB per second. */
         latencyAddSampleIfNeeded("fork",server.stat_fork_time/1000);
@@ -1847,6 +1870,7 @@ void rdbLoadProgressCallback(rio *r, const void *buf, size_t len) {
 
 /* Load an RDB file from the rio stream 'rdb'. On success C_OK is returned,
  * otherwise C_ERR is returned and 'errno' is set accordingly. */
+//从磁盘rdb加载数据
 int rdbLoadRio(rio *rdb, rdbSaveInfo *rsi, int loading_aof) {
     uint64_t dbid;
     int type, rdbver;
@@ -2066,6 +2090,7 @@ eoferr: /* unexpected end of file is handled here with a fatal exit */
  *
  * If you pass an 'rsi' structure initialied with RDB_SAVE_OPTION_INIT, the
  * loading code will fiil the information fields in the structure. */
+//从磁盘rdb加载数据
 int rdbLoad(char *filename, rdbSaveInfo *rsi) {
     FILE *fp;
     rio rdb;
@@ -2074,6 +2099,7 @@ int rdbLoad(char *filename, rdbSaveInfo *rsi) {
     if ((fp = fopen(filename,"r")) == NULL) return C_ERR;
     startLoading(fp);
     rioInitWithFile(&rdb,fp);
+    //从磁盘rdb加载数据
     retval = rdbLoadRio(&rdb,rsi,0);
     fclose(fp);
     stopLoading();
@@ -2211,6 +2237,7 @@ void backgroundSaveDoneHandlerSocket(int exitcode, int bysignal) {
 }
 
 /* When a background RDB saving/transfer terminates, call the right handler. */
+//子进程保存rdb完成后
 void backgroundSaveDoneHandler(int exitcode, int bysignal) {
     switch(server.rdb_child_type) {
     case RDB_CHILD_TYPE_DISK:

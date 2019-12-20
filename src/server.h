@@ -451,6 +451,7 @@ typedef long long mstime_t; /* millisecond time type. */
 /* Using the following macro you can run code inside serverCron() with the
  * specified period, specified in milliseconds.
  * The actual resolution depends on server.hz. */
+//计算指定时间可以执行几次sreverCorn
 #define run_with_period(_ms_) if ((_ms_ <= 1000/server.hz) || !(server.cronloops%((_ms_)/(1000/server.hz))))
 
 /* We can print the stacktrace, so our assert is defined this way: */
@@ -685,6 +686,7 @@ typedef struct multiState {
  * The fields used depend on client->btype. */
 typedef struct blockingState {
     /* Generic fields. */
+    //超时时间  ms
     mstime_t timeout;       /* Blocking operation timeout. If UNIX current time
                              * is > timeout then the operation timed out. */
 
@@ -796,6 +798,7 @@ typedef struct client {
     char slave_ip[NET_IP_STR_LEN]; /* Optionally given by REPLCONF ip-address */
     int slave_capa;         /* Slave capabilities: SLAVE_CAPA_* bitwise OR. */
     multiState mstate;      /* MULTI/EXEC state */
+    //block操作类型BLOCKED_LIST ...
     int btype;              /* Type of blocking op if CLIENT_BLOCKED. */
     blockingState bpop;     /* blocking state */
     long long woff;         /* Last write global replication offset. */
@@ -949,7 +952,9 @@ typedef struct rdbSaveInfo {
 #define RDB_SAVE_INFO_INIT {-1,0,"000000000000000000000000000000",-1}
 
 struct malloc_stats {
+    //已经使用内存
     size_t zmalloc_used;
+    //Resident Set Size，指实际使用物理内存
     size_t process_rss;
     size_t allocator_allocated;
     size_t allocator_active;
@@ -1066,10 +1071,11 @@ struct redisServer {
     //不接受外部连接,哨兵模式必须关闭0
     int protected_mode;         /* Don't accept external connections. */
     /* RDB / AOF loading information */
-    //是否正在加载pdb/aof
+    //是否正在从磁盘加载数据
     int loading;                /* We are loading data from disk if true */
     //加载的字节数
     off_t loading_total_bytes;
+    //要加载的文件大小
     off_t loading_loaded_bytes;
     //加载开始时间
     time_t loading_start_time;
@@ -1082,6 +1088,7 @@ struct redisServer {
                         *xgroupCommand;
     /* Fields used only for stats */
     time_t stat_starttime;          /* Server start time */
+    //统计处理的命令数量
     long long stat_numcommands;     /* Number of processed commands */
     //连接的client数量
     long long stat_numconnections;  /* Number of connections received */
@@ -1101,6 +1108,7 @@ struct redisServer {
     long long stat_active_defrag_scanned;   /* number of dictEntries scanned */
     //使用的最大内存
     size_t stat_peak_memory;        /* Max used memory record */
+    //fork子进程花费的时间
     long long stat_fork_time;       /* Time needed to perform latest fork() */
     double stat_fork_rate;          /* Fork rate in GB/sec. */
     //统计超过最大连接数被拒绝的client数量
@@ -1116,12 +1124,15 @@ struct redisServer {
     long long slowlog_log_slower_than; /* SLOWLOG time limit (to get logged) */
     //慢查询日志最大保存多少个
     unsigned long slowlog_max_len;     /* SLOWLOG max number of items logged */
+    //内存信息采样
     struct malloc_stats cron_malloc_stats; /* sampled in serverCron(). */
     //统计总共接收的字节数
     long long stat_net_input_bytes; /* Bytes read from network. */
     //统计返回给客户的字节数
     long long stat_net_output_bytes; /* Bytes written to network. */
+    //rdb保存时使用的cow
     size_t stat_rdb_cow_bytes;      /* Copy on write bytes during RDB saving. */
+    //统计aof重写使用的cow
     size_t stat_aof_cow_bytes;      /* Copy on write bytes during AOF rewrite. */
     /* The following two are used to track instantaneous metrics, like
      * number of operations per second, network traffic. */
@@ -1176,11 +1187,11 @@ struct redisServer {
     off_t aof_current_size;         /* AOF current size. */
     //aof同步到磁盘的数据位置
     off_t aof_fsync_offset;         /* AOF offset which is already synced to disk. */
-    //用户执行了bgsave命令 serverCorn中会触发aof重写操作
+    //如果正在执行bgsave操作 延迟aof重写操作(serverCorn中进行执行)
     int aof_rewrite_scheduled;      /* Rewrite once BGSAVE terminates. */
     //aof重写进程的pid
     pid_t aof_child_pid;            /* PID if rewriting process */
-    //aof重写时记录变换的数据缓冲
+    //aof重写时收到的数据缓冲(重写时放到aof_buf后在放一份到aof_rewrite_buf_blocks)
     list *aof_rewrite_buf_blocks;   /* Hold changes during an AOF rewrite. */
     //aof缓冲
     sds aof_buf;      /* AOF buffer, written before entering the event loop */
@@ -1192,59 +1203,81 @@ struct redisServer {
     time_t aof_flush_postponed_start; /* UNIX time of postponed AOF flush */
     //最后一次进行aof fsync的时间
     time_t aof_last_fsync;            /* UNIX time of last fsync() */
+    //aof重写耗时
     time_t aof_rewrite_time_last;   /* Time used by last AOF rewrite run. */
+    //aof重写开始的时间
     time_t aof_rewrite_time_start;  /* Current AOF rewrite start time. */
+    //最近一次aof重写是否成功
     int aof_lastbgrewrite_status;   /* C_OK or C_ERR */
     //延迟执行aof sync的次数
     unsigned long aof_delayed_fsync;  /* delayed AOF fsync() counter */
+    //rewrite过程中是否增量进行fsync操作
     int aof_rewrite_incremental_fsync;/* fsync incrementally while aof rewriting? */
+    //save rdb过程中是否增量进行fsync操作
     int rdb_save_incremental_fsync;   /* fsync incrementally while rdb saving? */
-    //aof最新写入状态
+    //aof最新写入状态 如果是C_ERR状态 在标记清除之前禁止接收写命令
     int aof_last_write_status;      /* C_OK or C_ERR */
     //记录最新一次写aof发生的错误
     int aof_last_write_errno;       /* Valid if aof_last_write_status is ERR */
     //是否跳过aof异常结尾
     int aof_load_truncated;         /* Don't stop on unexpected AOF EOF. */
+    //AOF重写过程中开启rdb与aof混合功能
     int aof_use_rdb_preamble;       /* Use RDB preamble on AOF rewrites. */
     /* AOF pipes used to communicate between parent and child during rewrite. */
-    // aof写数据到从节点文件描述符fd
+    // 父进程写数据到子进程 fd
     int aof_pipe_write_data_to_child;
+    //子进程读取父进程发送的数据 fd
     int aof_pipe_read_data_from_parent;
+    //子进程发送ack数据到父进程 fd
     int aof_pipe_write_ack_to_parent;
+    //父进程读取子进程发送的ack数据 fd
     int aof_pipe_read_ack_from_child;
+    //父进程发送ack数据到子进程 fd
     int aof_pipe_write_ack_to_child;
     int aof_pipe_read_ack_from_parent;
+    //停止发送数据到子进程
     int aof_stop_sending_diff;     /* If true stop sending accumulated diffs
                                       to child process. */
+    //aof重写期间 新增的命令
     sds aof_child_diff;             /* AOF diff accumulator child side. */
     /* RDB persistence */
-    //发生变化的key数量
+    //发生变化的key数量(rdb保存后 会把保存之前的值dirty_before_bgsave)
     long long dirty;                /* Changes to DB from the last save */
+    //记录save开始时dirty
     long long dirty_before_bgsave;  /* Used to restore dirty on failed BGSAVE */
     //保存rdb的进行pid
     pid_t rdb_child_pid;            /* PID of RDB saving child */
     struct saveparam *saveparams;   /* Save points array for RDB */
     //rdb save的条件有几种
     int saveparamslen;              /* Number of saving points */
+    //rdb文件名称
     char *rdb_filename;             /* Name of RDB file */
     int rdb_compression;            /* Use compression in RDB? */
+    //使用rdb checksum功能
     int rdb_checksum;               /* Use RDB checksum? */
     //最新一次save成功时间
     time_t lastsave;                /* Unix time of last successful save */
     //最新一次尝试bgsave时间
     time_t lastbgsave_try;          /* Unix time of last attempted bgsave */
+    //rdb花费的时间
     time_t rdb_save_time_last;      /* Time used by last RDB save run. */
+    //rdb开始时间
     time_t rdb_save_time_start;     /* Current RDB save start time. */
     int rdb_bgsave_scheduled;       /* BGSAVE when possible if true. */
+    //保存rdb的子进程类型  RDB_CHILD_TYPE_DISK(保存到磁盘)    RDB_CHILD_TYPE_SOCKET(发送到从节点)
     int rdb_child_type;             /* Type of save by active child. */
     int lastbgsave_status;          /* C_OK or C_ERR */
     int stop_writes_on_bgsave_err;  /* Don't allow writes if can't BGSAVE */
     int rdb_pipe_write_result_to_parent; /* RDB pipes used to return the state */
     int rdb_pipe_read_result_from_child; /* of each slave in diskless SYNC. */
     /* Pipe and data structures for child -> parent info sharing. */
+    //子进程发送相关数据到父进程  pipe
     int child_info_pipe[2];         /* Pipe used to write the child_info_data. */
+    //子进程信息
     struct {
+        //aof或rdb
         int process_type;           /* AOF or RDB child? */
+        //
         size_t cow_size;            /* Copy on write size. */
         unsigned long long magic;   /* Magic value to make sure data is valid. */
     } child_info_data;
@@ -1395,7 +1428,7 @@ struct redisServer {
     /* Scripting */
     lua_State *lua; /* The Lua interpreter. We use just one for all clients */
     client *lua_client;   /* The "fake client" to query Redis from Lua */
-    //lua
+    //正在执行lua脚步的客户端
     client *lua_caller;   /* The client running EVAL right now, or NULL */
     dict *lua_scripts;         /* A dictionary of SHA1 -> Lua scripts */
     unsigned long long lua_scripts_mem;  /* Cached scripts' memory + oh */
@@ -1409,6 +1442,7 @@ struct redisServer {
     int lua_replicate_commands; /* True if we are doing single commands repl. */
     int lua_multi_emitted;/* True if we already proagated MULTI. */
     int lua_repl;         /* Script replication flags for redis.set_repl(). */
+    //lua脚步执行超时
     int lua_timedout;     /* True if we reached the time limit for script
                              execution. */
     int lua_kill;         /* Kill the script if true. */

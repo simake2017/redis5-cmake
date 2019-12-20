@@ -59,6 +59,7 @@ void closeChildInfoPipe(void) {
 
 /* Send COW data to parent. The child should call this function after populating
  * the corresponding fields it want to sent (according to the process type). */
+//发送子进程信息到父进程
 void sendChildInfo(int ptype) {
     if (server.child_info_pipe[1] == -1) return;
     server.child_info_data.magic = CHILD_INFO_MAGIC;
@@ -70,6 +71,7 @@ void sendChildInfo(int ptype) {
 }
 
 /* Receive COW data from parent. */
+//接收子进程传递到父进程的信息
 void receiveChildInfo(void) {
     if (server.child_info_pipe[0] == -1) return;
     ssize_t wlen = sizeof(server.child_info_data);
