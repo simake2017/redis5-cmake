@@ -1322,11 +1322,14 @@ struct redisServer {
     char *masterauth;               /* AUTH with this password with master */
     //主节点  当前是从节点才会有值
     char *masterhost;               /* Hostname of master */
+    //主节点的端口
     int masterport;                 /* Port of master */
     int repl_timeout;               /* Timeout after N seconds of master idle */
+    //代表连接主节点的客户端
     client *master;     /* Client that is master for this slave */
     client *cached_master; /* Cached master to be reused for PSYNC. */
     int repl_syncio_timeout; /* Timeout for synchronous I/O calls */
+    //从节点复制状态
     int repl_state;          /* Replication status if the instance is a slave */
     off_t repl_transfer_size; /* Size of RDB to read from master during sync. */
     off_t repl_transfer_read; /* Amount of RDB read from master during sync. */

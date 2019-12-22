@@ -728,6 +728,7 @@ int getLongLongFromObject(robj *o, long long *target) {
     return C_OK;
 }
 
+//从robj中解析处long值,如果解析失败则向client返回错误提示
 int getLongLongFromObjectOrReply(client *c, robj *o, long long *target, const char *msg) {
     long long value;
     if (getLongLongFromObject(o, &value) != C_OK) {
@@ -742,6 +743,7 @@ int getLongLongFromObjectOrReply(client *c, robj *o, long long *target, const ch
     return C_OK;
 }
 
+//从robj中解析处long值,如果解析失败则向client返回错误提示
 int getLongFromObjectOrReply(client *c, robj *o, long *target, const char *msg) {
     long long value;
 

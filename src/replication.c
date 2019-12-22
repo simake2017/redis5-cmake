@@ -1982,10 +1982,12 @@ void replicationSetMaster(char *ip, int port) {
     if (server.master) {
         freeClient(server.master);
     }
+    //关闭连接到当前节点的被阻塞的client
     disconnectAllBlockedClients(); /* Clients blocked in master, now slave. */
 
     /* Force our slaves to resync with us as well. They may hopefully be able
      * to partially resync with us, but we can notify the replid change. */
+    //关闭当前节点的所有从连接
     disconnectSlaves();
     cancelReplicationHandshake();
     /* Before destroying our master state, create a cached master using
@@ -2038,6 +2040,7 @@ void replicationHandleMasterDisconnection(void) {
      * the slaves only if we'll have to do a full resync with our master. */
 }
 
+//slaveof(replicaof)命令处理
 void replicaofCommand(client *c) {
     /* SLAVEOF is not allowed in cluster mode as replication is automatically
      * configured using the current address of the master node. */
@@ -2048,8 +2051,10 @@ void replicaofCommand(client *c) {
 
     /* The special host/port combination "NO" "ONE" turns the instance
      * into a master. Otherwise the new master address is set. */
+    //SLAVEOF NO ONE 关闭复制功能
     if (!strcasecmp(c->argv[1]->ptr,"no") &&
         !strcasecmp(c->argv[2]->ptr,"one")) {
+        //关闭
         if (server.masterhost) {
             replicationUnsetMaster();
             sds client = catClientInfoString(sdsempty(),c);
@@ -2059,7 +2064,7 @@ void replicaofCommand(client *c) {
         }
     } else {
         long port;
-
+        //已经建立复制功能直接返回
         if (c->flags & CLIENT_SLAVE)
         {
             /* If a client is already a replica they cannot run this command,
