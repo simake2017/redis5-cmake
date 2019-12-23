@@ -46,6 +46,7 @@
  * done within 'timeout' milliseconds the operation succeeds and 'size' is
  * returned. Otherwise the operation fails, -1 is returned, and an unspecified
  * partial write could be performed against the file descriptor. */
+//发送命令 等待返回直到超时
 ssize_t syncWrite(int fd, char *ptr, ssize_t size, long long timeout) {
     ssize_t nwritten, ret = size;
     long long start = mstime();
@@ -82,6 +83,7 @@ ssize_t syncWrite(int fd, char *ptr, ssize_t size, long long timeout) {
  * within 'timeout' milliseconds the operation succeed and 'size' is returned.
  * Otherwise the operation fails, -1 is returned, and an unspecified amount of
  * data could be read from the file descriptor. */
+//读取指定字节
 ssize_t syncRead(int fd, char *ptr, ssize_t size, long long timeout) {
     ssize_t nread, totread = 0;
     long long start = mstime();
@@ -122,13 +124,14 @@ ssize_t syncRead(int fd, char *ptr, ssize_t size, long long timeout) {
  *
  * On success the number of bytes read is returned, otherwise -1.
  * On success the string is always correctly terminated with a 0 byte. */
+//读取一行
 ssize_t syncReadLine(int fd, char *ptr, ssize_t size, long long timeout) {
     ssize_t nread = 0;
 
     size--;
     while(size) {
         char c;
-
+        //读取一个字节
         if (syncRead(fd,&c,1,timeout) == -1) return -1;
         if (c == '\n') {
             *ptr = '\0';

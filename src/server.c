@@ -1175,6 +1175,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     if (zmalloc_used_memory() > server.stat_peak_memory)
         server.stat_peak_memory = zmalloc_used_memory();
 
+    //内存情况统计
     run_with_period(100) {
         /* Sample the RSS and other metrics here since this is a relatively slow call.
          * We must sample the zmalloc_used at the same time we take the rss, otherwise
@@ -1363,6 +1364,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
 
     /* Replication cron function -- used to reconnect to master,
      * detect transfer failures, start background RDB transfers and so forth. */
+    //主从复制
     run_with_period(1000) replicationCron();
 
     /* Run the Redis Cluster cron. */
@@ -3033,6 +3035,7 @@ void authCommand(client *c) {
 
 /* The PING command. It works in a different way if the client is in
  * in Pub/Sub mode. */
+//处理Ping命令  pub/sub场景下有不同的处理方式
 void pingCommand(client *c) {
     /* The command takes zero or one arguments. */
     if (c->argc > 2) {

@@ -817,6 +817,7 @@ void disconnectSlaves(void) {
 /* Remove the specified client from global lists where the client could
  * be referenced, not including the Pub/Sub channels.
  * This is used by freeClient() and replicationCacheMaster(). */
+//从全局client集合中移除特定的client
 void unlinkClient(client *c) {
     listNode *ln;
 
@@ -853,6 +854,7 @@ void unlinkClient(client *c) {
     }
 
     /* Remove from the list of pending writes if needed. */
+    //移除等待返回数据的client
     if (c->flags & CLIENT_PENDING_WRITE) {
         ln = listSearchKey(server.clients_pending_write,c);
         serverAssert(ln != NULL);

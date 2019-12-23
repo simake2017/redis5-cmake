@@ -2484,6 +2484,7 @@ rdbSaveInfo *rdbPopulateSaveInfo(rdbSaveInfo *rsi) {
      * connects to us, the NULL repl_backlog will trigger a full
      * synchronization, at the same time we will use a new replid and clear
      * replid2. */
+    //主节点&&支持部分复制
     if (!server.masterhost && server.repl_backlog) {
         /* Note that when server.slaveseldb is -1, it means that this master
          * didn't apply any write commands after a full synchronization.
@@ -2496,6 +2497,7 @@ rdbSaveInfo *rdbPopulateSaveInfo(rdbSaveInfo *rsi) {
 
     /* If the instance is a slave we need a connected master
      * in order to fetch the currently selected DB. */
+    //从节点
     if (server.master) {
         rsi->repl_stream_db = server.master->db->id;
         return rsi;

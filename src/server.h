@@ -786,16 +786,22 @@ typedef struct client {
     off_t repldboff;        /* Replication DB file offset. */
     off_t repldbsize;       /* Replication DB file size. */
     sds replpreamble;       /* Replication DB preamble. */
+    //从这里开始进行复制
     long long read_reploff; /* Read replication offset if this is a master. */
+    //部分复制的位置
     long long reploff;      /* Applied replication offset if this is a master. */
     long long repl_ack_off; /* Replication ack offset, if this is a slave. */
+    //节点最近一次从收到数据的时间
     long long repl_ack_time;/* Replication ack time, if this is a slave. */
     long long psync_initial_offset; /* FULLRESYNC reply offset other slaves
                                        copying this slave output buffer
                                        should use. */
     char replid[CONFIG_RUN_ID_SIZE+1]; /* Master replication ID (if master). */
+    //slave使用的端口
     int slave_listening_port; /* As configured with: SLAVECONF listening-port */
+    //salve ip
     char slave_ip[NET_IP_STR_LEN]; /* Optionally given by REPLCONF ip-address */
+    //从节点支持的rdb特性
     int slave_capa;         /* Slave capabilities: SLAVE_CAPA_* bitwise OR. */
     multiState mstate;      /* MULTI/EXEC state */
     //block操作类型BLOCKED_LIST ...
@@ -939,8 +945,10 @@ struct redisMemOverhead {
  * replication in order to make sure that chained slaves (slaves of slaves)
  * select the correct DB and are able to accept the stream coming from the
  * top-level master. */
+//主从复制需要的信息
 typedef struct rdbSaveInfo {
     /* Used saving and loading. */
+    //master节点选择的db
     int repl_stream_db;  /* DB to select in server.master client. */
 
     /* Used only loading. */
@@ -1290,12 +1298,15 @@ struct redisServer {
     char *syslog_ident;             /* Syslog ident */
     int syslog_facility;            /* Syslog facility */
     /* Replication (master) */
+    //主节点的runid
     char replid[CONFIG_RUN_ID_SIZE+1];  /* My current replication ID. */
     char replid2[CONFIG_RUN_ID_SIZE+1]; /* replid inherited from master*/
     //backlog缓冲中写到的位置
     long long master_repl_offset;   /* My current replication offset */
     long long second_replid_offset; /* Accept offsets up to this for replid2. */
+    //从节点使用的db
     int slaveseldb;                 /* Last SELECTed DB in replication output */
+    //master pings slave间隔N秒
     int repl_ping_slave_period;     /* Master pings the slave every N seconds */
     //部分复制
     char *repl_backlog;             /* Replication backlog for partial syncs */
@@ -1309,34 +1320,45 @@ struct redisServer {
     //backlog缓冲中可以开始读的位置
     long long repl_backlog_off;     /* Replication "master offset" of first
                                        byte in the replication backlog buffer.*/
+    //当没有从节点的时间超过阀值时释放backlog
     time_t repl_backlog_time_limit; /* Time without slaves after the backlog
                                        gets released. */
+    //从节点数量为0开始的时间
     time_t repl_no_slaves_since;    /* We have no slaves since that time.
                                        Only valid if server.slaves len is 0. */
     int repl_min_slaves_to_write;   /* Min number of slaves to write. */
     int repl_min_slaves_max_lag;    /* Max lag of <count> slaves to write. */
     int repl_good_slaves_count;     /* Number of slaves with lag <= max_lag. */
+    //直接通过socket发送rdb
     int repl_diskless_sync;         /* Send RDB to slaves sockets directly. */
+    // 无盘复制时，延迟指定的时长，以等待更多的从节点
     int repl_diskless_sync_delay;   /* Delay to start a diskless repl BGSAVE. */
     /* Replication (slave) */
+    //复制时master节点的密码
     char *masterauth;               /* AUTH with this password with master */
     //主节点  当前是从节点才会有值
     char *masterhost;               /* Hostname of master */
     //主节点的端口
     int masterport;                 /* Port of master */
+    //距离上次从主节点接收到数据的空闲超时时间 单位秒
     int repl_timeout;               /* Timeout after N seconds of master idle */
     //代表连接主节点的客户端
     client *master;     /* Client that is master for this slave */
+    //缓存连接到主节点的client
     client *cached_master; /* Cached master to be reused for PSYNC. */
+    //复制时 sync超时时间 ms
     int repl_syncio_timeout; /* Timeout for synchronous I/O calls */
     //从节点复制状态
     int repl_state;          /* Replication status if the instance is a slave */
     off_t repl_transfer_size; /* Size of RDB to read from master during sync. */
     off_t repl_transfer_read; /* Amount of RDB read from master during sync. */
     off_t repl_transfer_last_fsync_off; /* Offset when we fsync-ed last time. */
+    //代表从节点连接到主节点的socket描述符
     int repl_transfer_s;     /* Slave -> Master SYNC socket */
+    //
     int repl_transfer_fd;    /* Slave -> Master SYNC temp file descriptor */
     char *repl_transfer_tmpfile; /* Slave-> master SYNC temp file name */
+    //从主节点最后接收到数据的时间
     time_t repl_transfer_lastio; /* Unix time of the latest read, for timeout */
     int repl_serve_stale_data; /* Serve stale data when link is down? */
     //slave是否是只读
@@ -1345,12 +1367,16 @@ struct redisServer {
     time_t repl_down_since; /* Unix time at which link with master went down */
     int repl_disable_tcp_nodelay;   /* Disable TCP_NODELAY after SYNC? */
     int slave_priority;             /* Reported in INFO and used by Sentinel. */
+    //发送给主节点的从节点端口 常用于端口转发或NAT场景下，对Master暴露真实IP和端口信息
     int slave_announce_port;        /* Give the master this listening port. */
+    //发送给主节点从节点的IP
     char *slave_announce_ip;        /* Give the master this ip address. */
     /* The following two fields is where we store master PSYNC replid/offset
      * while the PSYNC is in progress. At the end we'll copy the fields into
      * the server->master client structure. */
+    //保存进行异步复制的runid
     char master_replid[CONFIG_RUN_ID_SIZE+1];  /* Master PSYNC runid. */
+    //master节点 异步复制到的位置
     long long master_initial_offset;           /* Master PSYNC offset. */
     int repl_slave_lazy_flush;          /* Lazy FLUSHALL before loading DB? */
     /* Replication script cache. */

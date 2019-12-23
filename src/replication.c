@@ -138,7 +138,7 @@ void feedReplicationBacklog(void *ptr, size_t len) {
         //缓冲还可用字节
         size_t thislen = server.repl_backlog_size - server.repl_backlog_idx;
         if (thislen > len) thislen = len;
-        //复制数据到缓冲中
+        //复制指定长度的数据到缓冲中
         memcpy(server.repl_backlog+server.repl_backlog_idx,p,thislen);
         //更新缓冲中下次可写位置
         server.repl_backlog_idx += thislen;
@@ -147,6 +147,7 @@ void feedReplicationBacklog(void *ptr, size_t len) {
             server.repl_backlog_idx = 0;
         len -= thislen;
         p += thislen;
+        //缓冲数据总长度
         server.repl_backlog_histlen += thislen;
     }
     if (server.repl_backlog_histlen > server.repl_backlog_size)
@@ -248,6 +249,7 @@ void replicationFeedSlaves(list *slaves, int dictid, robj **argv, int argc) {
         len = ll2string(aux+1,sizeof(aux)-1,argc);
         aux[len+1] = '\r';
         aux[len+2] = '\n';
+        //保存数据到缓冲中
         feedReplicationBacklog(aux,len+3);
 
         for (j = 0; j < argc; j++) {
@@ -580,6 +582,7 @@ need_full_resync:
  * Returns C_OK on success or C_ERR otherwise. */
 int startBgsaveForReplication(int mincapa) {
     int retval;
+    //开启无盘复制&&从节点支持rdb eof功能
     int socket_target = server.repl_diskless_sync && (mincapa & SLAVE_CAPA_EOF);
     listIter li;
     listNode *ln;
@@ -794,7 +797,7 @@ void syncCommand(client *c) {
  * full resync. */
 void replconfCommand(client *c) {
     int j;
-
+    //参数(包括命令本身)必须是奇数
     if ((c->argc % 2) == 0) {
         /* Number of arguments must be odd to make sure that every
          * option has a corresponding value. */
@@ -823,9 +826,9 @@ void replconfCommand(client *c) {
         } else if (!strcasecmp(c->argv[j]->ptr,"capa")) {
             /* Ignore capabilities not understood by this master. */
             if (!strcasecmp(c->argv[j+1]->ptr,"eof"))
-                c->slave_capa |= SLAVE_CAPA_EOF;
+                c->slave_capa |= SLAVE_CAPA_EOF; //从节点支持无盘rdb
             else if (!strcasecmp(c->argv[j+1]->ptr,"psync2"))
-                c->slave_capa |= SLAVE_CAPA_PSYNC2;
+                c->slave_capa |= SLAVE_CAPA_PSYNC2;  //从节点支持psync2
         } else if (!strcasecmp(c->argv[j]->ptr,"ack")) {
             /* REPLCONF ACK is used by slave to inform the master the amount
              * of replication stream that it processed so far. It is an
@@ -1061,6 +1064,7 @@ void shiftReplicationId(void) {
 
 /* Returns 1 if the given replication state is a handshake state,
  * 0 otherwise. */
+//从节点正在握手连接过程中
 int slaveIsInHandshakeState(void) {
     return server.repl_state >= REPL_STATE_RECEIVE_PONG &&
            server.repl_state <= REPL_STATE_RECEIVE_PSYNC;
@@ -1094,10 +1098,13 @@ void replicationEmptyDbCallback(void *privdata) {
 /* Once we have a link with the master and the synchroniziation was
  * performed, this function materializes the master client we store
  * at server.master, starting from the specified file descriptor. */
+//保存部分复制信息到新创建的master client
 void replicationCreateMasterClient(int fd, int dbid) {
+    //代表连接主节点的客户端
     server.master = createClient(fd);
     server.master->flags |= CLIENT_MASTER;
     server.master->authenticated = 1;
+    //master节点 异步复制到的位置
     server.master->reploff = server.master_initial_offset;
     server.master->read_reploff = server.master->reploff;
     memcpy(server.master->replid, server.master_replid,
@@ -1355,6 +1362,7 @@ error:
 #define SYNC_CMD_READ (1<<0)
 #define SYNC_CMD_WRITE (1<<1)
 #define SYNC_CMD_FULL (SYNC_CMD_READ|SYNC_CMD_WRITE)
+//发送命令到主节点或读取主节点返回的数据  PING AUTH
 char *sendSynchronousCommand(int flags, int fd, ...) {
 
     /* Create the command to send to the master, we use redis binary
@@ -1383,6 +1391,7 @@ char *sendSynchronousCommand(int flags, int fd, ...) {
         sdsfree(cmdargs);
 
         /* Transfer command to the server. */
+        //将命令发送到主节点
         if (syncWrite(fd,cmd,sdslen(cmd),server.repl_syncio_timeout*1000)
             == -1)
         {
@@ -1623,6 +1632,7 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
 
 /* This handler fires when the non blocking connect was able to
  * establish a connection with the master. */
+//与主节点建立连接后触发
 void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
     char tmpfile[256], *err = NULL;
     int dfd = -1, maxtries = 5;
@@ -1650,21 +1660,27 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
     }
 
     /* Send a PING to check the master is able to reply without errors. */
+    //连接master过程中
     if (server.repl_state == REPL_STATE_CONNECTING) {
         serverLog(LL_NOTICE,"Non blocking connect for SYNC fired the event.");
         /* Delete the writable event so that the readable event remains
          * registered and we can wait for the PONG reply. */
+        //移除订阅的写事件
         aeDeleteFileEvent(server.el,fd,AE_WRITABLE);
+        //等待Ping的回复
         server.repl_state = REPL_STATE_RECEIVE_PONG;
         /* Send the PING, don't check for errors at all, we have the timeout
          * that will take care about this. */
+        //发送Ping 判断与主节点是否通
         err = sendSynchronousCommand(SYNC_CMD_WRITE,fd,"PING",NULL);
         if (err) goto write_error;
         return;
     }
 
     /* Receive the PONG command. */
+    //收到主节点的回复(初建立时 响应的只有ping的回复)
     if (server.repl_state == REPL_STATE_RECEIVE_PONG) {
+        //读取主节点返回的数据
         err = sendSynchronousCommand(SYNC_CMD_READ,fd,NULL);
 
         /* We accept only two replies as valid, a positive +PONG reply
@@ -1684,22 +1700,27 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
                 "Master replied to PING, replication can continue...");
         }
         sdsfree(err);
+        //修改复制状态  向主节点发送Auth
         server.repl_state = REPL_STATE_SEND_AUTH;
     }
 
     /* AUTH with the master if required. */
     if (server.repl_state == REPL_STATE_SEND_AUTH) {
+        //配置了主节点的密码
         if (server.masterauth) {
             err = sendSynchronousCommand(SYNC_CMD_WRITE,fd,"AUTH",server.masterauth,NULL);
             if (err) goto write_error;
+            //从节点等待AUTH命令的响应
             server.repl_state = REPL_STATE_RECEIVE_AUTH;
             return;
         } else {
+            //发送从节点的端口
             server.repl_state = REPL_STATE_SEND_PORT;
         }
     }
 
     /* Receive AUTH reply. */
+    //收到主节点AUTH命令的回复
     if (server.repl_state == REPL_STATE_RECEIVE_AUTH) {
         err = sendSynchronousCommand(SYNC_CMD_READ,fd,NULL);
         if (err[0] == '-') {
@@ -1708,6 +1729,7 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
             goto error;
         }
         sdsfree(err);
+        //发送从节点的端口
         server.repl_state = REPL_STATE_SEND_PORT;
     }
 
@@ -1726,6 +1748,7 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
     }
 
     /* Receive REPLCONF listening-port reply. */
+    //收到REPLCONF listening-port响应
     if (server.repl_state == REPL_STATE_RECEIVE_PORT) {
         err = sendSynchronousCommand(SYNC_CMD_READ,fd,NULL);
         /* Ignore the error if any, not all the Redis versions support
@@ -1735,6 +1758,7 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
                                 "REPLCONF listening-port: %s", err);
         }
         sdsfree(err);
+        //Send REPLCONF ip-address
         server.repl_state = REPL_STATE_SEND_IP;
     }
 
@@ -1901,9 +1925,10 @@ write_error: /* Handle sendSynchronousCommand(SYNC_CMD_WRITE) errors. */
     goto error;
 }
 
+//创建连接master的连接 订阅socket读写事件
 int connectWithMaster(void) {
     int fd;
-
+    //连接主节点
     fd = anetTcpNonBlockBestEffortBindConnect(NULL,
         server.masterhost,server.masterport,NET_FIRST_BIND_ADDR);
     if (fd == -1) {
@@ -1912,6 +1937,7 @@ int connectWithMaster(void) {
         return C_ERR;
     }
 
+    //订阅socket上的读写事件
     if (aeCreateFileEvent(server.el,fd,AE_READABLE|AE_WRITABLE,syncWithMaster,NULL) ==
             AE_ERR)
     {
@@ -1922,6 +1948,7 @@ int connectWithMaster(void) {
 
     server.repl_transfer_lastio = server.unixtime;
     server.repl_transfer_s = fd;
+    //连接master的过程中
     server.repl_state = REPL_STATE_CONNECTING;
     return C_OK;
 }
@@ -1930,9 +1957,11 @@ int connectWithMaster(void) {
  * in progress to undo it.
  * Never call this function directly, use cancelReplicationHandshake() instead.
  */
+//删除当前节点与主节点建立的连接
 void undoConnectWithMaster(void) {
+    //代表从节点连接到主节点的socket描述符
     int fd = server.repl_transfer_s;
-
+    //删除fd上注册的事件
     aeDeleteFileEvent(server.el,fd,AE_READABLE|AE_WRITABLE);
     close(fd);
     server.repl_transfer_s = -1;
@@ -1941,8 +1970,10 @@ void undoConnectWithMaster(void) {
 /* Abort the async download of the bulk dataset while SYNC-ing with master.
  * Never call this function directly, use cancelReplicationHandshake() instead.
  */
+// 终止正在从主节点复制数据的连接
 void replicationAbortSyncTransfer(void) {
     serverAssert(server.repl_state == REPL_STATE_TRANSFER);
+    //删除当前节点与主节点建立的连接
     undoConnectWithMaster();
     close(server.repl_transfer_fd);
     unlink(server.repl_transfer_tmpfile);
@@ -1957,12 +1988,16 @@ void replicationAbortSyncTransfer(void) {
  * the replication state (server.repl_state) set to REPL_STATE_CONNECT.
  *
  * Otherwise zero is returned and no operation is perforemd at all. */
+//取消当前节点与主节点建立的连接
 int cancelReplicationHandshake(void) {
+    //正从master接收rdb文件
     if (server.repl_state == REPL_STATE_TRANSFER) {
+        // 终止正在从主节点复制数据的连接
         replicationAbortSyncTransfer();
+        //初始状态  准备连接master
         server.repl_state = REPL_STATE_CONNECT;
     } else if (server.repl_state == REPL_STATE_CONNECTING ||
-               slaveIsInHandshakeState())
+               slaveIsInHandshakeState())//正在连接master过程中||正在握手过程中
     {
         undoConnectWithMaster();
         server.repl_state = REPL_STATE_CONNECT;
@@ -1973,6 +2008,7 @@ int cancelReplicationHandshake(void) {
 }
 
 /* Set replication to the specified master address and port. */
+//配置主从
 void replicationSetMaster(char *ip, int port) {
     int was_master = server.masterhost == NULL;
 
@@ -1989,10 +2025,13 @@ void replicationSetMaster(char *ip, int port) {
      * to partially resync with us, but we can notify the replid change. */
     //关闭当前节点的所有从连接
     disconnectSlaves();
+    //取消当前节点与主节点建立的连接
     cancelReplicationHandshake();
     /* Before destroying our master state, create a cached master using
      * our own parameters, to later PSYNC with the new master. */
+    //从主节点切换到从节点缓存主节点的信息
     if (was_master) replicationCacheMasterUsingMyself();
+    //等待连接
     server.repl_state = REPL_STATE_CONNECT;
 }
 
@@ -2073,7 +2112,7 @@ void replicaofCommand(client *c) {
             addReplyError(c, "Command is not valid when client is a replica.");
             return;
         }
-
+        //解析端口
         if ((getLongFromObjectOrReply(c, c->argv[2], &port, NULL) != C_OK))
             return;
 
@@ -2086,6 +2125,7 @@ void replicaofCommand(client *c) {
         }
         /* There was no previous master or the user specified a different one,
          * we can continue. */
+        //为当前节点设置master
         replicationSetMaster(c->argv[1]->ptr, port);
         sds client = catClientInfoString(sdsempty(),c);
         serverLog(LL_NOTICE,"REPLICAOF %s:%d enabled (user request from '%s')",
@@ -2154,6 +2194,7 @@ void roleCommand(client *c) {
 /* Send a REPLCONF ACK command to the master to inform it about the current
  * processed offset. If we are not connected with a master, the command has
  * no effects. */
+//向主节点发送REPLCONF命令
 void replicationSendAck(void) {
     client *c = server.master;
 
@@ -2233,16 +2274,19 @@ void replicationCacheMaster(client *c) {
  * the new master will accept its replication ID, and potentiall also the
  * current offset if no data was lost during the failover. So we use our
  * current replication ID and offset in order to synthesize a cached master. */
+//从主节点切换到从节点缓存主节点的信息
 void replicationCacheMasterUsingMyself(void) {
     /* The master client we create can be set to any DBID, because
      * the new master will start its replication stream with SELECT. */
     server.master_initial_offset = server.master_repl_offset;
+    //保存部分复制信息到新创建的master client
     replicationCreateMasterClient(-1,-1);
 
     /* Use our own ID / offset. */
     memcpy(server.master->replid, server.replid, sizeof(server.replid));
 
     /* Set as cached master. */
+    //从全局client集合中移除特定的client
     unlinkClient(server.master);
     server.cached_master = server.master;
     server.master = NULL;
@@ -2560,20 +2604,25 @@ long long replicationGetSlaveOffset(void) {
 /* --------------------------- REPLICATION CRON  ---------------------------- */
 
 /* Replication cron function, called 1 time per second. */
+//主从复制定时任务 每秒调用一次
 void replicationCron(void) {
+    //静态变量  主从任务复制次数
     static long long replication_cron_loops = 0;
 
     /* Non blocking connection timeout? */
+    //等待连接的从节点超时
     if (server.masterhost &&
         (server.repl_state == REPL_STATE_CONNECTING ||
          slaveIsInHandshakeState()) &&
          (time(NULL)-server.repl_transfer_lastio) > server.repl_timeout)
     {
         serverLog(LL_WARNING,"Timeout connecting to the MASTER...");
+        //取消与主节点的连接
         cancelReplicationHandshake();
     }
 
     /* Bulk transfer I/O timeout? */
+    //接受rdb数据超时
     if (server.masterhost && server.repl_state == REPL_STATE_TRANSFER &&
         (time(NULL)-server.repl_transfer_lastio) > server.repl_timeout)
     {
@@ -2582,6 +2631,7 @@ void replicationCron(void) {
     }
 
     /* Timed out master when we are an already connected slave? */
+    //已经建立连接 没有收到数据 超时
     if (server.masterhost && server.repl_state == REPL_STATE_CONNECTED &&
         (time(NULL)-server.master->lastinteraction) > server.repl_timeout)
     {
@@ -2593,6 +2643,7 @@ void replicationCron(void) {
     if (server.repl_state == REPL_STATE_CONNECT) {
         serverLog(LL_NOTICE,"Connecting to MASTER %s:%d",
             server.masterhost, server.masterport);
+        //创建连接master的连接 订阅socket读写事件
         if (connectWithMaster() == C_OK) {
             serverLog(LL_NOTICE,"MASTER <-> REPLICA sync started");
         }
@@ -2601,9 +2652,10 @@ void replicationCron(void) {
     /* Send ACK to master from time to time.
      * Note that we do not send periodic acks to masters that don't
      * support PSYNC and replication offsets. */
+    //服务端支持PSYN操作
     if (server.masterhost && server.master &&
         !(server.master->flags & CLIENT_PRE_PSYNC))
-        replicationSendAck();
+        replicationSendAck(); //向主节点发送REPLCONF命令
 
     /* If we have attached slaves, PING them from time to time.
      * So slaves can implement an explicit timeout to masters, and will
@@ -2614,6 +2666,7 @@ void replicationCron(void) {
     robj *ping_argv[1];
 
     /* First, send PING according to ping_slave_period. */
+    //N秒ping一次从节点
     if ((replication_cron_loops % server.repl_ping_slave_period) == 0 &&
         listLength(server.slaves))
     {
@@ -2628,6 +2681,7 @@ void replicationCron(void) {
 
         if (!manual_failover_in_progress) {
             ping_argv[0] = createStringObject("PING",4);
+            //发送ping到从节点，发送前先放到复制缓冲中
             replicationFeedSlaves(server.slaves, server.slaveseldb,
                 ping_argv, 1);
             decrRefCount(ping_argv[0]);
@@ -2648,6 +2702,8 @@ void replicationCron(void) {
      * last interaction timer preventing a timeout. In this case we ignore the
      * ping period and refresh the connection once per second since certain
      * timeouts are set at a few seconds (example: PSYNC response). */
+    //向从节点发送"\n" 刷新最后交互时间避免超时
+    //没有使用Ping是为了避免
     listRewind(server.slaves,&li);
     while((ln = listNext(&li))) {
         client *slave = ln->value;
@@ -2665,6 +2721,7 @@ void replicationCron(void) {
     }
 
     /* Disconnect timedout slaves. */
+    //关闭连接超时的从节点
     if (listLength(server.slaves)) {
         listIter li;
         listNode *ln;
@@ -2693,8 +2750,9 @@ void replicationCron(void) {
     if (listLength(server.slaves) == 0 && server.repl_backlog_time_limit &&
         server.repl_backlog && server.masterhost == NULL)
     {
+        //距离没有从节点的空闲间隔
         time_t idle = server.unixtime - server.repl_no_slaves_since;
-
+        //达到阀值
         if (idle > server.repl_backlog_time_limit) {
             /* When we free the backlog, we always use a new
              * replication ID and clear the ID2. This is needed
@@ -2711,8 +2769,10 @@ void replicationCron(void) {
              *    master that will accept our PSYNC request by second
              *    replication ID, but there will be data inconsistency
              *    because we received writes. */
+            //修改主节点的runid
             changeReplicationId();
             clearReplicationId2();
+            //清空复制缓冲
             freeReplicationBacklog();
             serverLog(LL_NOTICE,
                 "Replication backlog freed after %d seconds "
@@ -2737,6 +2797,7 @@ void replicationCron(void) {
      * In case of diskless replication, we make sure to wait the specified
      * number of seconds (according to configuration) so that other slaves
      * have the time to arrive before we start streaming. */
+    //没有rdb与aof子进程在执行
     if (server.rdb_child_pid == -1 && server.aof_child_pid == -1) {
         time_t idle, max_idle = 0;
         int slaves_waiting = 0;
@@ -2747,15 +2808,18 @@ void replicationCron(void) {
         listRewind(server.slaves,&li);
         while((ln = listNext(&li))) {
             client *slave = ln->value;
+            //从节点在等待rdb生成
             if (slave->replstate == SLAVE_STATE_WAIT_BGSAVE_START) {
                 idle = server.unixtime - slave->lastinteraction;
                 if (idle > max_idle) max_idle = idle;
                 slaves_waiting++;
+                //所有从节点都具备的rdb功能
                 mincapa = (mincapa == -1) ? slave->slave_capa :
                                             (mincapa & slave->slave_capa);
             }
         }
 
+        //等待rdb的从节点数量>0&&y允许通过socket复制rdb&&最大空闲时间>repl_diskless_sync_delay
         if (slaves_waiting &&
             (!server.repl_diskless_sync ||
              max_idle > server.repl_diskless_sync_delay))
