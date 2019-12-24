@@ -793,6 +793,7 @@ typedef struct client {
     long long repl_ack_off; /* Replication ack offset, if this is a slave. */
     //节点最近一次从收到数据的时间
     long long repl_ack_time;/* Replication ack time, if this is a slave. */
+    //全量复制  从其它slave复制偏移量使用
     long long psync_initial_offset; /* FULLRESYNC reply offset other slaves
                                        copying this slave output buffer
                                        should use. */
@@ -1121,8 +1122,11 @@ struct redisServer {
     double stat_fork_rate;          /* Fork rate in GB/sec. */
     //统计超过最大连接数被拒绝的client数量
     long long stat_rejected_conn;   /* Clients rejected because of maxclients */
+    //统计全量同步数量
     long long stat_sync_full;       /* Number of full resyncs with slaves. */
+    //统计部分同步请求数量
     long long stat_sync_partial_ok; /* Number of accepted PSYNC requests. */
+    //统计psync走到全量同步的请求数量
     long long stat_sync_partial_err;/* Number of unaccepted PSYNC requests. */
     //慢查询日志
     list *slowlog;                  /* SLOWLOG list of commands */
@@ -1298,17 +1302,19 @@ struct redisServer {
     char *syslog_ident;             /* Syslog ident */
     int syslog_facility;            /* Syslog facility */
     /* Replication (master) */
-    //主节点的runid
+    //当前主节点的runid
     char replid[CONFIG_RUN_ID_SIZE+1];  /* My current replication ID. */
+    //主节点重启前的runid
     char replid2[CONFIG_RUN_ID_SIZE+1]; /* replid inherited from master*/
-    //backlog缓冲中写到的位置
+    //当前主节点全局复制偏移位置
     long long master_repl_offset;   /* My current replication offset */
+    //主节点重启前写到的为位置
     long long second_replid_offset; /* Accept offsets up to this for replid2. */
     //从节点使用的db
     int slaveseldb;                 /* Last SELECTed DB in replication output */
     //master pings slave间隔N秒
     int repl_ping_slave_period;     /* Master pings the slave every N seconds */
-    //部分复制
+    //积压缓冲
     char *repl_backlog;             /* Replication backlog for partial syncs */
     //backlog缓冲大小
     long long repl_backlog_size;    /* Backlog circular buffer size */
@@ -1326,8 +1332,11 @@ struct redisServer {
     //从节点数量为0开始的时间
     time_t repl_no_slaves_since;    /* We have no slaves since that time.
                                        Only valid if server.slaves len is 0. */
+    //最少要同步几个从节点
     int repl_min_slaves_to_write;   /* Min number of slaves to write. */
+    //增量rdb同步的最大延迟时间
     int repl_min_slaves_max_lag;    /* Max lag of <count> slaves to write. */
+    // 复制正常的从节点数量
     int repl_good_slaves_count;     /* Number of slaves with lag <= max_lag. */
     //直接通过socket发送rdb
     int repl_diskless_sync;         /* Send RDB to slaves sockets directly. */
@@ -1374,7 +1383,7 @@ struct redisServer {
     /* The following two fields is where we store master PSYNC replid/offset
      * while the PSYNC is in progress. At the end we'll copy the fields into
      * the server->master client structure. */
-    //保存进行异步复制的runid
+    //从节点记录的主节点的runid
     char master_replid[CONFIG_RUN_ID_SIZE+1];  /* Master PSYNC runid. */
     //master节点 异步复制到的位置
     long long master_initial_offset;           /* Master PSYNC offset. */
