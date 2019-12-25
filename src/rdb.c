@@ -2255,8 +2255,10 @@ void backgroundSaveDoneHandler(int exitcode, int bysignal) {
 /* Spawn an RDB child that writes the RDB to the sockets of the slaves
  * that are currently in SLAVE_STATE_WAIT_BGSAVE_START state. */
 int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
+    //需要发送数据的从节点的fd数组
     int *fds;
     uint64_t *clientids;
+    //需要发送数据的从节点的fd数量
     int numfds;
     listNode *ln;
     listIter li;
@@ -2289,6 +2291,7 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
         if (slave->replstate == SLAVE_STATE_WAIT_BGSAVE_START) {
             clientids[numfds] = slave->id;
             fds[numfds++] = slave->fd;
+            //向从节点发送全量复制命令   +FULLRESYNC replid offset
             replicationSetupSlaveForFullResync(slave,getPsyncInitialOffset());
             /* Put the socket in blocking mode to simplify RDB transfer.
              * We'll restore it when the children returns (since duped socket
@@ -2303,6 +2306,7 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
     start = ustime();
     if ((childpid = fork()) == 0) {
         /* Child */
+        //子进程
         int retval;
         rio slave_sockets;
 
@@ -2372,6 +2376,7 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
         exitFromChild((retval == C_OK) ? 0 : 1);
     } else {
         /* Parent */
+        //父进程
         if (childpid == -1) {
             serverLog(LL_WARNING,"Can't save in background: fork: %s",
                 strerror(errno));
