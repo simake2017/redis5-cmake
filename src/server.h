@@ -789,7 +789,7 @@ typedef struct client {
     sds replpreamble;       /* Replication DB preamble. */
     //复制偏移读取到的位置
     long long read_reploff; /* Read replication offset if this is a master. */
-    //主节点复制偏移位置
+    //读取到的主节点复制偏移位置
     long long reploff;      /* Applied replication offset if this is a master. */
     long long repl_ack_off; /* Replication ack offset, if this is a slave. */
     //从节点最近一次从收到数据的时间
@@ -1304,9 +1304,9 @@ struct redisServer {
     char *syslog_ident;             /* Syslog ident */
     int syslog_facility;            /* Syslog facility */
     /* Replication (master) */
-    //当前主节点的runid
+    //当前主节点的replid
     char replid[CONFIG_RUN_ID_SIZE+1];  /* My current replication ID. */
-    //主节点重启前的runid
+    //主节点重启前的replid
     char replid2[CONFIG_RUN_ID_SIZE+1]; /* replid inherited from master*/
     //当前主节点全局复制偏移位置 即命令已经写到了此位置
     long long master_repl_offset;   /* My current replication offset */
@@ -1367,7 +1367,7 @@ struct redisServer {
     off_t repl_transfer_last_fsync_off; /* Offset when we fsync-ed last time. */
     //代表从节点连接到主节点的socket描述符
     int repl_transfer_s;     /* Slave -> Master SYNC socket */
-    //
+    //从节点接收主节点rdb数据的使用的临时文件
     int repl_transfer_fd;    /* Slave -> Master SYNC temp file descriptor */
     char *repl_transfer_tmpfile; /* Slave-> master SYNC temp file name */
     //从主节点最后接收到数据的时间
@@ -1388,7 +1388,7 @@ struct redisServer {
      * the server->master client structure. */
     //从节点记录的主节点的runid
     char master_replid[CONFIG_RUN_ID_SIZE+1];  /* Master PSYNC runid. */
-    //主节点 复制到的位置
+    //从节点记录第一次同步时的初始偏移量
     long long master_initial_offset;           /* Master PSYNC offset. */
     int repl_slave_lazy_flush;          /* Lazy FLUSHALL before loading DB? */
     /* Replication script cache. */

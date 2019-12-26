@@ -85,6 +85,7 @@ void createReplicationBacklog(void) {
     /* We don't have any data inside our buffer, but virtually the first
      * byte we have is the next byte that will be generated for the
      * replication stream. */
+    //新的全局偏移
     server.repl_backlog_off = server.master_repl_offset+1;
 }
 
@@ -745,6 +746,7 @@ void syncCommand(client *c) {
     //
     c->repldbfd = -1;
     c->flags |= CLIENT_SLAVE;
+    //第一次可能是全量同步 所以增量同步不需要在添加
     listAddNodeTail(server.slaves,c);
 
     /* Create the replication backlog if needed. */
@@ -1559,10 +1561,12 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
 
     /* Reading half */
     reply = sendSynchronousCommand(SYNC_CMD_READ,fd,NULL);
+    //主节点收到psync后可能会返回一个\n防止连接超时
     if (sdslen(reply) == 0) {
         /* The master may send empty newlines after it receives PSYNC
          * and before to reply, just to keep the connection alive. */
         sdsfree(reply);
+        //稍后再试
         return PSYNC_WAIT_REPLY;
     }
 
@@ -1599,8 +1603,10 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
                 server.master_initial_offset);
         }
         /* We are going to full resync, discard the cached master structure. */
+        //准备进销全量同步清空从节点保存的主节点信息
         replicationDiscardCachedMaster();
         sdsfree(reply);
+        //全量同步
         return PSYNC_FULLRESYNC;
     }
 
@@ -1619,11 +1625,12 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
         char *end = reply+9;
         while(end[0] != '\r' && end[0] != '\n' && end[0] != '\0') end++;
         if (end-start == CONFIG_RUN_ID_SIZE) {
+            //主节点的replid
             char new[CONFIG_RUN_ID_SIZE+1];
             memcpy(new,start,CONFIG_RUN_ID_SIZE);
             new[CONFIG_RUN_ID_SIZE] = '\0';
 
-            //主节点的runid发生变化,保存旧的runid与偏移 然后重新赋值
+            //主节点的replid发生变化,保存旧的replid与偏移 然后重新赋值
             if (strcmp(new,server.cached_master->replid)) {
                 /* Master ID changed. */
                 serverLog(LL_WARNING,"Master replication ID changed to %s",new);
@@ -1645,6 +1652,7 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
 
         /* Setup the replication to continue. */
         sdsfree(reply);
+        //将cache_master重新赋值代表连接主节点的客户端 订阅fd上的读事件处理主节点发过来的增量数据
         replicationResurrectCachedMaster(fd);
 
         /* If this instance was restarted and we read the metadata to
@@ -1902,8 +1910,9 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
         goto error;
     }
 
-    //读取部分复制的返回的内容
+    //读取增量复制或全量复制返回的内容
     psync_result = slaveTryPartialResynchronization(fd,1);
+    //数据还没返回稍后在试
     if (psync_result == PSYNC_WAIT_REPLY) return; /* Try again later... */
 
     /* If the master is in an transient error, we should try to PSYNC
@@ -1915,6 +1924,7 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
     /* Note: if PSYNC does not return WAIT_REPLY, it will take care of
      * uninstalling the read handler from the file descriptor. */
 
+    //增量复制的情况下订阅了fd上可读事件读取增量数据,在从节点的master client上执行增量命令
     if (psync_result == PSYNC_CONTINUE) {
         serverLog(LL_NOTICE, "MASTER <-> REPLICA sync: Master accepted a Partial Resynchronization.");
         return;
@@ -1925,6 +1935,7 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
      * entirely different data set and we have no way to incrementally feed
      * our slaves after that. */
     disconnectSlaves(); /* Force our slaves to resync with us as well. */
+    //从节点的从节点不能增量同步
     freeReplicationBacklog(); /* Don't allow our chained slaves to PSYNC. */
 
     /* Fall back to SYNC if needed. Otherwise psync_result == PSYNC_FULLRESYNC
@@ -1940,6 +1951,7 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
     }
 
     /* Prepare a suitable temp file for bulk transfer */
+    //创建一个临时的接收rdb文件
     while(maxtries--) {
         snprintf(tmpfile,256,
             "temp-%d.%ld.rdb",(int)server.unixtime,(long int)getpid());
@@ -1953,6 +1965,7 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
     }
 
     /* Setup the non blocking download of the bulk file. */
+    //订阅fd上的可读事件接收全量数据 rdb
     if (aeCreateFileEvent(server.el,fd, AE_READABLE,readSyncBulkPayload,NULL)
             == AE_ERR)
     {
@@ -2362,6 +2375,7 @@ void replicationCacheMasterUsingMyself(void) {
 
 /* Free a cached master, called when there are no longer the conditions for
  * a partial resync on reconnection. */
+//清空缓存的主机点信息
 void replicationDiscardCachedMaster(void) {
     if (server.cached_master == NULL) return;
 
@@ -2377,7 +2391,9 @@ void replicationDiscardCachedMaster(void) {
  * This function is called when successfully setup a partial resynchronization
  * so the stream of data that we'll receive will start from were this
  * master left. */
+//注册事件读取主节点返回的增量数据
 void replicationResurrectCachedMaster(int newfd) {
+    //todo cache_master如何初始化的
     server.master = server.cached_master;
     server.cached_master = NULL;
     server.master->fd = newfd;
@@ -2389,6 +2405,7 @@ void replicationResurrectCachedMaster(int newfd) {
 
     /* Re-add to the list of clients. */
     linkClient(server.master);
+    //注册事件  读取主节点发送的增量数据(命令)
     if (aeCreateFileEvent(server.el, newfd, AE_READABLE,
                           readQueryFromClient, server.master)) {
         serverLog(LL_WARNING,"Error resurrecting the cached master, impossible to add the readable handler: %s", strerror(errno));
@@ -2705,6 +2722,7 @@ void replicationCron(void) {
         (time(NULL)-server.master->lastinteraction) > server.repl_timeout)
     {
         serverLog(LL_WARNING,"MASTER timeout: no data nor PING received...");
+        //释放主从连接 对于从节点master相当于一个client
         freeClient(server.master);
     }
 
@@ -2722,7 +2740,7 @@ void replicationCron(void) {
     /* Send ACK to master from time to time.
      * Note that we do not send periodic acks to masters that don't
      * support PSYNC and replication offsets. */
-    //服务端支持PSYN操作
+    //回复主节点Psync ack offset
     if (server.masterhost && server.master &&
         !(server.master->flags & CLIENT_PRE_PSYNC))
         replicationSendAck(); //向主节点发送REPLCONF命令

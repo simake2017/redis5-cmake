@@ -1223,6 +1223,7 @@ int rdbSaveRioWithEOFMark(rio *rdb, int *error, rdbSaveInfo *rsi) {
     if (rioWrite(rdb,"$EOF:",5) == 0) goto werr;
     if (rioWrite(rdb,eofmark,RDB_EOF_MARK_SIZE) == 0) goto werr;
     if (rioWrite(rdb,"\r\n",2) == 0) goto werr;
+    //保存rdb
     if (rdbSaveRio(rdb,error,RDB_SAVE_NONE,rsi) == C_ERR) goto werr;
     if (rioWrite(rdb,eofmark,RDB_EOF_MARK_SIZE) == 0) goto werr;
     return C_OK;
@@ -2315,7 +2316,7 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
 
         closeListeningSockets(0);
         redisSetProcTitle("redis-rdb-to-slaves");
-
+        //通过socket发送rdb数据
         retval = rdbSaveRioWithEOFMark(&slave_sockets,NULL,rsi);
         if (retval == C_OK && rioFlush(&slave_sockets) == 0)
             retval = C_ERR;
