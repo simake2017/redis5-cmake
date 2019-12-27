@@ -1206,6 +1206,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
 
     /* We received a SIGTERM, shutting down here in a safe way, as it is
      * not ok doing so inside the signal handler. */
+    //关机
     if (server.shutdown_asap) {
         if (prepareForShutdown(SHUTDOWN_NOFLAGS) == C_OK) exit(0);
         serverLog(LL_WARNING,"SIGTERM received but errors trying to shut down the server, check the logs for more information");
@@ -1279,6 +1280,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
                     (int) server.rdb_child_pid,
                     (int) server.aof_child_pid);
             } else if (pid == server.rdb_child_pid) {
+                //rdb保存完成后
                 backgroundSaveDoneHandler(exitcode,bysignal);
                 if (!bysignal && exitcode == 0) receiveChildInfo();
             } else if (pid == server.aof_child_pid) {
@@ -2809,6 +2811,7 @@ int processCommand(client *c) {
     /* Only allow commands with flag "t", such as INFO, SLAVEOF and so on,
      * when slave-serve-stale-data is no and we are a slave with a broken
      * link with master. */
+    //从节点要与主节点同步数据完成
     if (server.masterhost && server.repl_state != REPL_STATE_CONNECTED &&
         server.repl_serve_stale_data == 0 &&
         !(c->cmd->flags & CMD_STALE))

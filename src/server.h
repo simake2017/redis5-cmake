@@ -783,13 +783,15 @@ typedef struct client {
     int replstate;          /* Replication state if this is a slave. */
     //
     int repl_put_online_on_ack; /* Install slave write handler on ACK. */
+    //复制的rdb文件
     int repldbfd;           /* Replication DB file descriptor. */
     off_t repldboff;        /* Replication DB file offset. */
+    //复制的rdb文件大小
     off_t repldbsize;       /* Replication DB file size. */
     sds replpreamble;       /* Replication DB preamble. */
     //复制偏移读取到的位置
     long long read_reploff; /* Read replication offset if this is a master. */
-    //读取到的主节点复制偏移位置
+    //主节点复制偏移位置
     long long reploff;      /* Applied replication offset if this is a master. */
     long long repl_ack_off; /* Replication ack offset, if this is a slave. */
     //从节点最近一次从收到数据的时间
@@ -1305,12 +1307,13 @@ struct redisServer {
     int syslog_facility;            /* Syslog facility */
     /* Replication (master) */
     //当前主节点的replid
+    //从节点 连接的主节点的replid
     char replid[CONFIG_RUN_ID_SIZE+1];  /* My current replication ID. */
-    //主节点重启前的replid
+    //从节点断开变成主节点时 主节点的replid
     char replid2[CONFIG_RUN_ID_SIZE+1]; /* replid inherited from master*/
     //当前主节点全局复制偏移位置 即命令已经写到了此位置
     long long master_repl_offset;   /* My current replication offset */
-    //主节点重启前写到的为位置
+    //从节点断开变成主节点时记录主节点的偏移位置
     long long second_replid_offset; /* Accept offsets up to this for replid2. */
     //从节点最近使用的db
     int slaveseldb;                 /* Last SELECTed DB in replication output */
@@ -1348,7 +1351,7 @@ struct redisServer {
     /* Replication (slave) */
     //复制时master节点的密码
     char *masterauth;               /* AUTH with this password with master */
-    //主节点  当前是从节点才会有值
+    //主节点配置  当前是从节点才会有值
     char *masterhost;               /* Hostname of master */
     //主节点的端口
     int masterport;                 /* Port of master */
@@ -1356,13 +1359,15 @@ struct redisServer {
     int repl_timeout;               /* Timeout after N seconds of master idle */
     //代表连接主节点的客户端
     client *master;     /* Client that is master for this slave */
-    //保存当前节点作为主节点时的信息
+    //记录从节点上次连接的主节点信息 重启时从rdb加载
     client *cached_master; /* Cached master to be reused for PSYNC. */
     //复制时 sync超时时间 ms
     int repl_syncio_timeout; /* Timeout for synchronous I/O calls */
     //从节点复制状态
     int repl_state;          /* Replication status if the instance is a slave */
+    //主节点发送的rdb文件大小
     off_t repl_transfer_size; /* Size of RDB to read from master during sync. */
+    //主节点发送的rdb文件读取了多少字节
     off_t repl_transfer_read; /* Amount of RDB read from master during sync. */
     off_t repl_transfer_last_fsync_off; /* Offset when we fsync-ed last time. */
     //代表从节点连接到主节点的socket描述符
@@ -1372,6 +1377,7 @@ struct redisServer {
     char *repl_transfer_tmpfile; /* Slave-> master SYNC temp file name */
     //从主节点最后接收到数据的时间
     time_t repl_transfer_lastio; /* Unix time of the latest read, for timeout */
+    //当主从断开时是否还提供服务
     int repl_serve_stale_data; /* Serve stale data when link is down? */
     //slave是否是只读
     int repl_slave_ro;          /* Slave is read only? */

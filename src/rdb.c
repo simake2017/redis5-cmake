@@ -1087,8 +1087,10 @@ int rdbSaveInfoAuxFields(rio *rdb, int flags, rdbSaveInfo *rsi) {
     if (rsi) {
         if (rdbSaveAuxFieldStrInt(rdb,"repl-stream-db",rsi->repl_stream_db)
             == -1) return -1;
+        //记录replid
         if (rdbSaveAuxFieldStrStr(rdb,"repl-id",server.replid)
             == -1) return -1;
+        //master_repl_offset 复制偏移
         if (rdbSaveAuxFieldStrInt(rdb,"repl-offset",server.master_repl_offset)
             == -1) return -1;
     }
@@ -2255,6 +2257,10 @@ void backgroundSaveDoneHandler(int exitcode, int bysignal) {
 
 /* Spawn an RDB child that writes the RDB to the sockets of the slaves
  * that are currently in SLAVE_STATE_WAIT_BGSAVE_START state. */
+//通过scoket直接将rdb发送给从节点
+//1.发送全量复制命令  +FULLRESYNC replid offset 到所有等待rdb数据的从节点
+//2.发送rdb数据到所有等待rdb数据的从节点
+//3.等待rdb数据的从节点进入SLAVE_STATE_WAIT_BGSAVE_END状态
 int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
     //需要发送数据的从节点的fd数组
     int *fds;
@@ -2292,7 +2298,8 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
         if (slave->replstate == SLAVE_STATE_WAIT_BGSAVE_START) {
             clientids[numfds] = slave->id;
             fds[numfds++] = slave->fd;
-            //向从节点发送全量复制命令   +FULLRESYNC replid offset
+            // 向从节点发送全量复制命令   +FULLRESYNC replid offset
+            // 从节点进入SLAVE_STATE_WAIT_BGSAVE_END状态 等待rdb生成后将数据返回给从节点
             replicationSetupSlaveForFullResync(slave,getPsyncInitialOffset());
             /* Put the socket in blocking mode to simplify RDB transfer.
              * We'll restore it when the children returns (since duped socket
@@ -2310,13 +2317,13 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
         //子进程
         int retval;
         rio slave_sockets;
-
+        //关联要发送的从节点
         rioInitWithFdset(&slave_sockets,fds,numfds);
         zfree(fds);
 
         closeListeningSockets(0);
         redisSetProcTitle("redis-rdb-to-slaves");
-        //通过socket发送rdb数据
+        //在子进程中通过socket发送rdb数据
         retval = rdbSaveRioWithEOFMark(&slave_sockets,NULL,rsi);
         if (retval == C_OK && rioFlush(&slave_sockets) == 0)
             retval = C_ERR;

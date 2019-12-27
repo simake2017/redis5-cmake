@@ -381,6 +381,7 @@ long long emptyDb(int dbnum, int flags, void(callback)(void*)) {
     return removed;
 }
 
+//client连接的当前哪个db
 int selectDb(client *c, int id) {
     if (id < 0 || id >= server.dbnum)
         return C_ERR;
