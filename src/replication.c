@@ -186,6 +186,9 @@ void feedReplicationBacklogWithObject(robj *o) {
  * stream. Instead if the instance is a slave and has sub-slaves attached,
  * we use replicationFeedSlavesFromMaster() */
 //同步写操作到从节点,先放到复制缓冲中，在发送到从节点
+//写到从节点的数据先保存到了客户端的缓冲中了,只有当putSlaveOnline执行后订阅了主从fd上的可写事件后才会写道从节点
+//全量同步是异步同步到从节点的,所以只有当数据同步完成后才能在发送客户端缓冲中的数据
+//增量同步是同步发送给从节点的所以可以直接发送回从节点
 void replicationFeedSlaves(list *slaves, int dictid, robj **argv, int argc) {
     listNode *ln;
     listIter li;
@@ -299,6 +302,7 @@ void replicationFeedSlaves(list *slaves, int dictid, robj **argv, int argc) {
 /* This function is used in order to proxy what we receive from our master
  * to our sub-slaves. */
 #include <ctype.h>
+//发送从节点从主节点收到的数据到从节点的从节点
 void replicationFeedSlavesFromMasterStream(list *slaves, char *buf, size_t buflen) {
     listNode *ln;
     listIter li;
@@ -912,6 +916,9 @@ void replconfCommand(client *c) {
             /* If this was a diskless replication, we need to really put
              * the slave online when the first ACK is received (which
              * confirms slave is online and ready to get more data). */
+            //无盘复制完后在第一次收到从节点的ack时将repl_put_online_on_ack设置为1(updateSlavesWaitingBgsave),
+            //订阅主从连接fd上的可写事件 将同步过程中client中缓存的数据发送到从节点,
+            //之后将repl_put_online_on_ack设置为0
             if (c->repl_put_online_on_ack && c->replstate == SLAVE_STATE_ONLINE)
                 putSlaveOnline(c);
             /* Note: this command does not reply anything! */
@@ -943,6 +950,8 @@ void replconfCommand(client *c) {
  *    sending it to the slave.
  * 3) Update the count of good slaves. */
 //rdb文件发送完成后续只需发送增量数据
+//订阅主从fd上的可写事件将主从复制过程中产生的数据发送过去
+//这些数据是在主节点处理完命令后写到从节点的客户端缓冲中的,当订阅主从fd上可写事件触发时发送给从节点
 void putSlaveOnline(client *slave) {
     slave->replstate = SLAVE_STATE_ONLINE;
     slave->repl_put_online_on_ack = 0;
@@ -1012,7 +1021,9 @@ void sendBulkToSlave(aeEventLoop *el, int fd, void *privdata, int mask) {
     if (slave->repldboff == slave->repldbsize) {
         close(slave->repldbfd);
         slave->repldbfd = -1;
+        //rdb文件复制完成后移除订阅的事件
         aeDeleteFileEvent(server.el,slave->fd,AE_WRITABLE);
+        //订阅主从fd上的可写事件将复制过程中产生的数据发送给从节点
         putSlaveOnline(slave);
     }
 }
@@ -1066,6 +1077,7 @@ void updateSlavesWaitingBgsave(int bgsaveerr, int type) {
                  * we change the replication state ASAP, since our slave
                  * is technically online now. */
                 slave->replstate = SLAVE_STATE_ONLINE;
+                //在第一次收到从节点的ack时使用该值使用后清空,用户订阅主从复制fd上的可写事件
                 slave->repl_put_online_on_ack = 1;
                 slave->repl_ack_time = server.unixtime; /* Timeout otherwise. */
             } else {
@@ -1217,6 +1229,7 @@ void restartAOFAfterSYNC() {
 
 /* Asynchronously read the SYNC payload we receive from a master */
 #define REPL_MAX_WRITTEN_BEFORE_FSYNC (1024*1024*8) /* 8 MB */
+//接收主节点发送过来全量数据
 void readSyncBulkPayload(aeEventLoop *el, int fd, void *privdata, int mask) {
     char buf[4096];
     ssize_t nread, readlen, nwritten;
@@ -1326,6 +1339,7 @@ void readSyncBulkPayload(aeEventLoop *el, int fd, void *privdata, int mask) {
     }
 
     server.repl_transfer_lastio = server.unixtime;
+    //保存rdb数据到文件
     if ((nwritten = write(server.repl_transfer_fd,buf,nread)) != nread) {
         serverLog(LL_WARNING,"Write error or short write writing to the DB dump file needed for MASTER <-> REPLICA synchronization: %s", 
             (nwritten == -1) ? strerror(errno) : "short write");
@@ -1396,10 +1410,11 @@ void readSyncBulkPayload(aeEventLoop *el, int fd, void *privdata, int mask) {
          * handler, otherwise it will get called recursively since
          * rdbLoad() will call the event loop to process events from time to
          * time for non blocking loading. */
-        //加载数据期间
+        //移除fd上的事件回调
         aeDeleteFileEvent(server.el,server.repl_transfer_s,AE_READABLE);
         serverLog(LL_NOTICE, "MASTER <-> REPLICA sync: Loading DB in memory");
         rdbSaveInfo rsi = RDB_SAVE_INFO_INIT;
+        //记载rdb
         if (rdbLoad(server.rdb_filename,&rsi) != C_OK) {
             serverLog(LL_WARNING,"Failed trying to load the MASTER synchronization DB from disk");
             cancelReplicationHandshake();
@@ -1697,7 +1712,7 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
         /* Setup the replication to continue. */
         sdsfree(reply);
         //将cache_master重新赋值代表连接主节点的客户端
-        // 订阅fd上的读事件处理主节点发过来的增量数据
+        // 订阅fd上的读事件处理主节点发过来的增量数据交给readQueryFromClient处理不在走repl中的回调方法
         //将cache_master赋值给master同时置空cache_master
         replicationResurrectCachedMaster(fd);
 
@@ -2466,6 +2481,7 @@ void replicationResurrectCachedMaster(int newfd) {
 
     /* We may also need to install the write handler as well if there is
      * pending data in the write buffers. */
+    //还有数据未发送到主节点
     if (clientHasPendingReplies(server.master)) {
         if (aeCreateFileEvent(server.el, newfd, AE_WRITABLE,
                           sendReplyToClient, server.master)) {
@@ -2843,7 +2859,8 @@ void replicationCron(void) {
      * ping period and refresh the connection once per second since certain
      * timeouts are set at a few seconds (example: PSYNC response). */
     //向从节点发送"\n" 刷新最后交互时间避免超时
-    //没有使用Ping是为了避免
+    //没有使用Ping是为了避免更改偏移量
+    //netwroking.c:1271处会刷新repl_ack_time
     listRewind(server.slaves,&li);
     while((ln = listNext(&li))) {
         client *slave = ln->value;

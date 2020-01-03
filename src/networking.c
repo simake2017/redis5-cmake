@@ -228,6 +228,7 @@ int prepareClientToWrite(client *c) {
 
     /* Masters don't receive replies, unless CLIENT_MASTER_FORCE_REPLY flag
      * is set. */
+    //只有标记了CLIENT_MASTER_FORCE_REPLY 从节点才能发送数据到主节点
     if ((c->flags & CLIENT_MASTER) &&
         !(c->flags & CLIENT_MASTER_FORCE_REPLY)) return C_ERR;
 
@@ -1266,6 +1267,7 @@ int processInlineBuffer(client *c) {
     /* Newline from slaves can be used to refresh the last ACK time.
      * This is useful for a slave to ping back while loading a big
      * RDB file. */
+    //从节点发送\n 刷新repl_ack_time
     if (querylen == 0 && c->flags & CLIENT_SLAVE)
         c->repl_ack_time = server.unixtime;
 
@@ -1519,18 +1521,18 @@ void processInputBuffer(client *c) {
         /* Determine request type when unknown. */
         if (!c->reqtype) {
             if (c->querybuf[c->qb_pos] == '*') {
-                //redis client协议
+                //多条批量
                 c->reqtype = PROTO_REQ_MULTIBULK;
             } else {
-                //telnet协议
+                //一条
                 c->reqtype = PROTO_REQ_INLINE;
             }
         }
 
-        //处理telnet连接
+        //单条类型的命令
         if (c->reqtype == PROTO_REQ_INLINE) {
             if (processInlineBuffer(c) != C_OK) break;
-        } else if (c->reqtype == PROTO_REQ_MULTIBULK) {   //处理redis-client连接
+        } else if (c->reqtype == PROTO_REQ_MULTIBULK) {   //批量命令 有个多个参数的命令
             if (processMultibulkBuffer(c) != C_OK) break;
         } else {
             serverPanic("Unknown request type");
@@ -1575,10 +1577,11 @@ void processInputBuffer(client *c) {
  * is flagged as master. Usually you want to call this instead of the
  * raw processInputBuffer(). */
 void processInputBufferAndReplicate(client *c) {
-    //不是主节点
+    //当前连接不是与主节点建立的连接
     if (!(c->flags & CLIENT_MASTER)) {
         processInputBuffer(c);
     } else {
+        //将从主节点收到的数据发送到从节点的从节点
         size_t prev_offset = c->reploff;
         processInputBuffer(c);
         size_t applied = c->reploff - prev_offset;
@@ -1642,6 +1645,7 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
         /* Append the query buffer to the pending (not applied) buffer
          * of the master. We'll use this buffer later in order to have a
          * copy of the string applied by the last command executed. */
+        //缓存收到从主节点发送到从节点的数据
         c->pending_querybuf = sdscatlen(c->pending_querybuf,
                                         c->querybuf+qblen,nread);
     }

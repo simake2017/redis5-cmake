@@ -269,9 +269,9 @@ typedef long long mstime_t; /* millisecond time type. */
 #define BLOCKED_NUM 6     /* Number of blocked states. */
 
 /* Client request types */
-//telnet协议
+//一条
 #define PROTO_REQ_INLINE 1
-//redis client协议
+//多条批量
 #define PROTO_REQ_MULTIBULK 2
 
 /* Client classes for client limits, currently used only for
@@ -743,6 +743,7 @@ typedef struct client {
     sds querybuf;           /* Buffer we use to accumulate client queries. */
     //querybuf缓冲的已经读取到的位置
     size_t qb_pos;          /* The position we have read in querybuf. */
+    //缓存收到从主节点发送到从节点的数据
     sds pending_querybuf;   /* If this client is flagged as master, this buffer
                                represents the yet not applied portion of the
                                replication stream that we are receiving from
@@ -781,7 +782,9 @@ typedef struct client {
     int authenticated;      /* When requirepass is non-NULL. */
     //从节点状态  SLAVE_STATE_WAIT_BGSAVE_START SLAVE_STATE_WAIT_BGSAVE_END...
     int replstate;          /* Replication state if this is a slave. */
-    //
+    // 收到从节点的ack时 是否创建订阅主从fd的可写事件 用于将主从客户端缓冲的数据发送给从节点
+    // 只有在无盘复制回调任务(updateSlavesWaitingBgsave)中才会设置为1
+    //在第一次收到从节点的ack后又设置为0
     int repl_put_online_on_ack; /* Install slave write handler on ACK. */
     //复制的rdb文件
     int repldbfd;           /* Replication DB file descriptor. */
