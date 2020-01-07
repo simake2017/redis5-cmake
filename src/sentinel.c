@@ -240,6 +240,7 @@ struct sentinelState {
     int tilt;           /* Are we in TILT mode? */
     int running_scripts;    /* Number of scripts in execution right now. */
     mstime_t tilt_start_time;       /* When TITL started. */
+    //定时任务上次执行时间
     mstime_t previous_time;         /* Last time we ran the time handler. */
     list *scripts_queue;            /* Queue of user scripts to execute. */
     char *announce_ip;  /* IP addr that is gossiped to other sentinels if
@@ -461,7 +462,9 @@ struct redisCommand sentinelcmds[] = {
 /* This function overwrites a few normal Redis config default with Sentinel
  * specific defaults. */
 void initSentinelConfig(void) {
+    //sentinel 默认端口26379
     server.port = REDIS_SENTINEL_PORT;
+    //sentinel关闭保护模式
     server.protected_mode = 0; /* Sentinel must be exposed. */
 }
 
@@ -520,6 +523,7 @@ void sentinelIsRunning(void) {
     if (j == CONFIG_RUN_ID_SIZE) {
         /* Pick ID and persist the config. */
         getRandomHexChars(sentinel.myid,CONFIG_RUN_ID_SIZE);
+        //保存当前配置到磁盘
         sentinelFlushConfig();
     }
 
@@ -528,6 +532,7 @@ void sentinelIsRunning(void) {
 
     /* We want to generate a +monitor event for every configured master
      * at startup. */
+    //当master启动时发送一个+monitor event
     sentinelGenerateInitialMonitorEvents();
 }
 
@@ -1920,12 +1925,14 @@ void rewriteConfigSentinelOption(struct rewriteConfigState *state) {
  * configuration file to make sure changes are committed to disk.
  *
  * On failure the function logs a warning on the Redis log. */
+//保存当前配置到磁盘
 void sentinelFlushConfig(void) {
     int fd = -1;
     int saved_hz = server.hz;
     int rewrite_status;
 
     server.hz = CONFIG_DEFAULT_HZ;
+    //重写配置
     rewrite_status = rewriteConfig(server.configfile);
     server.hz = saved_hz;
 
@@ -4489,6 +4496,7 @@ void sentinelHandleDictOfRedisInstances(dict *instances) {
  * for SENTINEL_TILT_PERIOD to elapse before starting to act again.
  *
  * During TILT time we still collect information, we just do not act. */
+//是否进入titl模式
 void sentinelCheckTiltCondition(void) {
     mstime_t now = mstime();
     mstime_t delta = now - sentinel.previous_time;
@@ -4502,6 +4510,7 @@ void sentinelCheckTiltCondition(void) {
 }
 
 void sentinelTimer(void) {
+    //是否进入titl模式
     sentinelCheckTiltCondition();
     sentinelHandleDictOfRedisInstances(sentinel.masters);
     sentinelRunPendingScripts();

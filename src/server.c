@@ -4210,7 +4210,9 @@ int main(int argc, char **argv) {
      * in sentinel mode will have the effect of populating the sentinel
      * data structures with master nodes to monitor. */
     if (server.sentinel_mode) {//哨兵模式
+        //初始化sentinel
         initSentinelConfig();
+        //初始化sentinel
         initSentinel();
     }
 
@@ -4279,6 +4281,7 @@ int main(int argc, char **argv) {
             }
             j++;
         }
+        //sentinel模式下只能从磁盘获取配置文件不能从命令行传入
         if (server.sentinel_mode && configfile && *configfile == '-') {
             serverLog(LL_WARNING,
                 "Sentinel config from STDIN not allowed.");
