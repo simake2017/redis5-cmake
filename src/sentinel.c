@@ -4680,7 +4680,7 @@ void sentinelAbortFailover(sentinelRedisInstance *ri) {
 void sentinelHandleRedisInstance(sentinelRedisInstance *ri) {
     /* ========== MONITORING HALF ============ */
     /* Every kind of instance */
-    //重新连接主节点 同时订阅主节点的__sentinel__:hello通道
+    //重新连接redis节点 同时订阅redis节点上  的__sentinel__:hello通道
     sentinelReconnectInstance(ri);
     //周期性发送PING、INFO、PUBLISTH命令
     sentinelSendPeriodicCommands(ri);
