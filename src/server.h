@@ -1063,7 +1063,9 @@ struct redisServer {
     int ipfd_count;             /* Used slots in ipfd[] */
     //unix socket
     int sofd;                   /* Unix socket file descriptor */
+    //集群node监听socket fd
     int cfd[CONFIG_BINDADDR_MAX];/* Cluster bus listening socket */
+    //集群node监听socket fd数量
     int cfd_count;              /* Used slots in cfd[] */
     //client链表
     list *clients;              /* List of active clients */
@@ -1461,6 +1463,7 @@ struct redisServer {
     int cluster_enabled;      /* Is cluster enabled? */
     mstime_t cluster_node_timeout; /* Cluster node timeout. */
     char *cluster_configfile; /* Cluster auto-generated config file name. */
+    //集群cluster
     struct clusterState *cluster;  /* State of the cluster */
     int cluster_migration_barrier; /* Cluster replicas migration barrier. */
     int cluster_slave_validity_factor; /* Slave max data age for failover. */

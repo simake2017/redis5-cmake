@@ -426,6 +426,7 @@ void clusterUpdateMyselfFlags(void) {
     }
 }
 
+//集群初始化
 void clusterInit(void) {
     int saveconf = 0;
 
@@ -454,10 +455,12 @@ void clusterInit(void) {
 
     /* Lock the cluster config file to make sure every node uses
      * its own nodes.conf. */
+    //锁定配置文件 每个node使用自己的配置文件
     if (clusterLockConfig(server.cluster_configfile) == C_ERR)
         exit(1);
 
     /* Load or create a new nodes configuration. */
+    //加载或创建一个node配置文件
     if (clusterLoadConfig(server.cluster_configfile) == C_ERR) {
         /* No configuration found. We will just use the random name provided
          * by the createClusterNode() function. */
@@ -465,6 +468,7 @@ void clusterInit(void) {
             createClusterNode(NULL,CLUSTER_NODE_MYSELF|CLUSTER_NODE_MASTER);
         serverLog(LL_NOTICE,"No cluster configuration found, I'm %.40s",
             myself->name);
+        //保存新建的节点
         clusterAddNode(myself);
         saveconf = 1;
     }
