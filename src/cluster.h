@@ -57,6 +57,7 @@ typedef struct clusterLink {
 #define CLUSTER_NODE_HANDSHAKE 32 /* We have still to exchange the first ping */
 #define CLUSTER_NODE_NOADDR   64  /* We don't know the address of this node */
 #define CLUSTER_NODE_MEET 128     /* Send a MEET message to this node */
+//有从节点主节点就能进行槽迁移
 #define CLUSTER_NODE_MIGRATE_TO 256 /* Master elegible for replica migration. */
 #define CLUSTER_NODE_NOFAILOVER 512 /* Slave will not try to failver. */
 #define CLUSTER_NODE_NULL_NAME "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
@@ -147,7 +148,7 @@ typedef struct clusterNode {
     mstime_t voted_time;     /* Last time we voted for a slave of this master */
     //收到节点复制偏移的时间
     mstime_t repl_offset_time;  /* Unix time we received offset for this node */
-    //脱离集群的时间
+    //主节点没有从节点的开始时间
     mstime_t orphaned_time;     /* Starting time of orphaned master condition */
     //节点的复制偏移
     long long repl_offset;      /* Last known repl offset for this node. */
@@ -182,24 +183,29 @@ typedef struct clusterState {
     uint64_t slots_keys_count[CLUSTER_SLOTS];
     rax *slots_to_keys;
     /* The following fields are used to take the slave state on elections. */
+    //failover开始时间
     mstime_t failover_auth_time; /* Time of previous or next election. */
     //目前收到的投票数量
     int failover_auth_count;    /* Number of votes received so far. */
+    //是否开始投票
     int failover_auth_sent;     /* True if we already asked for votes. */
+    //获取比当前从节点复制偏移大的从节点数据
     int failover_auth_rank;     /* This slave rank for current auth request. */
     uint64_t failover_auth_epoch; /* Epoch of the current election. */
     //从节点不能进行failover的原因
     int cant_failover_reason;   /* Why a slave is currently not able to
                                    failover. See the CANT_FAILOVER_* macros. */
     /* Manual failover state in common. */
-    //手动进行failover的时间 0没有进行手动failover
+    //手动进行failover的超时时间 0没有进行手动failover
     mstime_t mf_end;            /* Manual failover time limit (ms unixtime).
                                    It is zero if there is no MF in progress. */
     /* Manual failover state of master. */
     clusterNode *mf_slave;      /* Slave performing the manual failover. */
     /* Manual failover state of slave. */
+    //主节点的偏移
     long long mf_master_offset; /* Master offset the slave needs to start MF
                                    or zero if stil not received. */
+    //是否能进行手动failover
     int mf_can_start;           /* If non-zero signal that the manual failover
                                    can start requesting masters vote. */
     /* The followign fields are used by masters to take state on elections. */
