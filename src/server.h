@@ -1461,14 +1461,18 @@ struct redisServer {
     /* Cluster */
     //集群开关
     int cluster_enabled;      /* Is cluster enabled? */
+    //节点点通信超时时间
     mstime_t cluster_node_timeout; /* Cluster node timeout. */
+    //默认文件名 nodes.conf
     char *cluster_configfile; /* Cluster auto-generated config file name. */
     //集群cluster
     struct clusterState *cluster;  /* State of the cluster */
     int cluster_migration_barrier; /* Cluster replicas migration barrier. */
     int cluster_slave_validity_factor; /* Slave max data age for failover. */
+    //是否所有槽状态都正常
     int cluster_require_full_coverage; /* If true, put the cluster down if
                                           there is at least an uncovered slot.*/
+    //如果主节点处于故障状态 组织从节点进行故障转移
     int cluster_slave_no_failover;  /* Prevent slave from starting a failover
                                        if the master is in failure state. */
     char *cluster_announce_ip;  /* IP address to announce on cluster bus. */
