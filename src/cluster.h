@@ -147,7 +147,7 @@ typedef struct clusterNode {
     mstime_t pong_received;  /* Unix time we received the pong */
     //fail标记设置时间
     mstime_t fail_time;      /* Unix time when FAIL flag was set */
-    //投票master节点的从节点的时间
+    //最近一次给master节点的从节点投票时间
     mstime_t voted_time;     /* Last time we voted for a slave of this master */
     //收到节点复制偏移的时间
     mstime_t repl_offset_time;  /* Unix time we received offset for this node */

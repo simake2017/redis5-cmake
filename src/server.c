@@ -2719,6 +2719,7 @@ int processCommand(client *c) {
     {
         int hashslot;
         int error_code;
+        //计算属于的节点
         clusterNode *n = getNodeByQuery(c,c->cmd,c->argv,c->argc,
                                         &hashslot,&error_code);
         if (n == NULL || n != server.cluster->myself) {
