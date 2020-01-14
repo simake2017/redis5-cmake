@@ -43,7 +43,9 @@ typedef struct clusterLink {
     mstime_t ctime;             /* Link creation time */
     //fd
     int fd;                     /* TCP socket file descriptor */
+    //带发送消息缓冲
     sds sndbuf;                 /* Packet send buffer */
+    //接收到的消息缓冲
     sds rcvbuf;                 /* Packet reception buffer */
     struct clusterNode *node;   /* Node related to this link if any, or NULL */
 } clusterLink;
@@ -113,13 +115,14 @@ typedef struct clusterLink {
 /* This structure represent elements of node->fail_reports. */
 //失败的节点
 typedef struct clusterNodeFailReport {
+    //哪个节点认为当前节点是pfail
     struct clusterNode *node;  /* Node reporting the failure condition. */
-    //最近一次报告的时间
+    //最近一次报告时间
     mstime_t time;             /* Time of the last report from this node. */
 } clusterNodeFailReport;
 
 typedef struct clusterNode {
-    //node创建时间
+    //node创建时间  cluster meet时创建节点
     mstime_t ctime; /* Node object creation time. */
     char name[CLUSTER_NAMELEN]; /* Node name, hex string, sha1-size */
     int flags;      /* CLUSTER_NODE_... */
@@ -152,7 +155,7 @@ typedef struct clusterNode {
     mstime_t orphaned_time;     /* Starting time of orphaned master condition */
     //节点的复制偏移
     long long repl_offset;      /* Last known repl offset for this node. */
-    //节点的ip地址
+    //节点的ip地址   myself节点如果没有指定在处理meet消息时会获取监听的fd对应的ip进行初始化
     char ip[NET_IP_STR_LEN];  /* Latest known IP address of this node */
     //集群与客户端交互端口
     int port;                   /* Latest known clients port of this node */
@@ -161,7 +164,7 @@ typedef struct clusterNode {
     //如果是当前节点 代表的是监听的地址
     //如果非当前节点 代表当前节点连接的其它节点
     clusterLink *link;          /* TCP/IP link with this node */
-    //
+    //判定当前节点处于PFail或fail状态的节点
     list *fail_reports;         /* List of nodes signaling this as failing */
 } clusterNode;
 
@@ -202,7 +205,7 @@ typedef struct clusterState {
     /* Manual failover state of master. */
     clusterNode *mf_slave;      /* Slave performing the manual failover. */
     /* Manual failover state of slave. */
-    //主节点的偏移
+    //从节点进行手动failover时对应的主节点的偏移
     long long mf_master_offset; /* Master offset the slave needs to start MF
                                    or zero if stil not received. */
     //是否能进行手动failover
@@ -216,6 +219,7 @@ typedef struct clusterState {
     /* Messages received and sent by type. */
     //指定类型的消息发送次数
     long long stats_bus_messages_sent[CLUSTERMSG_TYPE_COUNT];
+    //指定类型的消息接收次数
     long long stats_bus_messages_received[CLUSTERMSG_TYPE_COUNT];
     //处于部分失败PFAIL状态的节点数量
     long long stats_pfail_nodes;    /* Number of nodes in PFAIL status,
@@ -229,6 +233,7 @@ typedef struct clusterState {
  * address for all the next messages. */
 typedef struct {
     char nodename[CLUSTER_NAMELEN];
+    //对应要传播的节点中相应的字段
     uint32_t ping_sent;
     uint32_t pong_received;
     char ip[NET_IP_STR_LEN];  /* IP address last time it was seen */
