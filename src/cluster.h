@@ -316,6 +316,11 @@ typedef struct {
                            processed replication offset if node is a slave. */
     //发送消息的节点名称
     char sender[CLUSTER_NAMELEN]; /* Name of the sender node */
+
+    /**
+     * wangyang 这里是 cluster_slots / 8  对应着是一个bitmap, char 是一个字节
+     * /8 之后 ，字节中每个bit 都可以代表一个 slot
+     */
     unsigned char myslots[CLUSTER_SLOTS/8];
     //如果是从节点 则代表连接的主节点的名称
     char slaveof[CLUSTER_NAMELEN];

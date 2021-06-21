@@ -62,6 +62,9 @@
 struct aeEventLoop;
 
 /* Types and data structures */
+/*
+ * wangyang 这里是定义的 相关函数类型
+ */
 typedef void aeFileProc(struct aeEventLoop *eventLoop, int fd, void *clientData, int mask);
 typedef int aeTimeProc(struct aeEventLoop *eventLoop, long long id, void *clientData);
 typedef void aeEventFinalizerProc(struct aeEventLoop *eventLoop, void *clientData);
@@ -107,6 +110,11 @@ typedef struct aeFiredEvent {
 } aeFiredEvent;
 
 /* State of an event based program */
+/**
+ * 时间循环 event loop
+ *
+ * 事件循环对象
+ */
 typedef struct aeEventLoop {
     //当前最大的fd
     int maxfd;   /* highest file descriptor currently registered */

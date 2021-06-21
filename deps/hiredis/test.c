@@ -19,7 +19,11 @@ enum connection_type {
     CONN_FD
 };
 
+/**
+ * wangyang 配置对象
+ */
 struct config {
+    //连接类型 tcp  unix fd
     enum connection_type type;
 
     struct {

@@ -316,6 +316,10 @@ dictEntry *dictAddRaw(dict *d, void *key, dictEntry **existing)
     /* Get the index of the new element, or -1 if
      * the element already exists. */
     //获取key在字典中的的位置,-1已经存在
+    /*
+     * wangyang 会使用 hashFunction 获取相应的 hash值
+     * (d)->type->hashFunction(key) 这里是宏定义的方式
+     */
     if ((index = _dictKeyIndex(d, key, dictHashKey(d,key), existing)) == -1)
         return NULL;
 
@@ -1001,7 +1005,7 @@ static long _dictKeyIndex(dict *d, const void *key, uint64_t hash, dictEntry **e
         return -1;
     for (table = 0; table <= 1; table++) {
         //计算在hash table中的位置
-        idx = hash & d->ht[table].sizemask;
+        idx = hash & d->ht[table].sizemask; //--> 这里通过简单的掩码 运算 获取相应的 idx位置
         /* Search if this slot does not already contain the given key */
         he = d->ht[table].table[idx];
         while(he) {

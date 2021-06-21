@@ -62,12 +62,20 @@
 
 //创建事件处理器
 //setsize：客户端数量
+/**
+ *
+  wangyang set size 是监听的 最大数量
+ */
 aeEventLoop *aeCreateEventLoop(int setsize) {
     aeEventLoop *eventLoop;
     int i;
 
+    /**
+     * 按照 分配 zmalloc 分配块空间大小 分配给 *eventLoop 指针
+     * 按照 eventLoop 方式 去使用
+     */
     if ((eventLoop = zmalloc(sizeof(*eventLoop))) == NULL) goto err;
-    eventLoop->events = zmalloc(sizeof(aeFileEvent)*setsize);
+    eventLoop->events = zmalloc(sizeof(aeFileEvent)*setsize); //--> 这里会直接 进行 创建相应的 大小 , 分配指针 位置
     eventLoop->fired = zmalloc(sizeof(aeFiredEvent)*setsize);
     if (eventLoop->events == NULL || eventLoop->fired == NULL) goto err;
     eventLoop->setsize = setsize;//监听的最大连接数
@@ -131,12 +139,21 @@ void aeDeleteEventLoop(aeEventLoop *eventLoop) {
     zfree(eventLoop);
 }
 
+//暂停事件循环
 void aeStop(aeEventLoop *eventLoop) {
     eventLoop->stop = 1;
 }
 
+
+/**
+ * wangyang 这里是 往el 上 注册相应的事件 fd 表示 文件描述符
+ * 比如 某个 client 对应的scoket 那么就可以调用本方法
+ * 从数组中 获取相应的 aeFileEvent 然后 注册到 epoll 上，
+ * 当有相应的事件触发时，就可以从事件中找到对应的 处理方法 然后执行
+ *
+ */
 int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
-        aeFileProc *proc, void *clientData)
+        aeFileProc *proc, void *clientData) /* 这里定义了一个函数类型 ，然后传入一个函数指针，对应的实例有相关的函数功能*/
 {
     if (fd >= eventLoop->setsize) {
         errno = ERANGE;
@@ -149,7 +166,10 @@ int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
     if (aeApiAddEvent(eventLoop, fd, mask) == -1)
         return AE_ERR;
     fe->mask |= mask;
-    if (mask & AE_READABLE) fe->rfileProc = proc;
+    /**
+     * wangyang 这里用于声明相应的 事件 操作对应的函数
+     */
+    if (mask & AE_READABLE) fe->rfileProc = proc; //--> wangyang ** 这就是 在创建事件时指定 的 相应的proc函数
     if (mask & AE_WRITABLE) fe->wfileProc = proc;
     fe->clientData = clientData;
     if (fd > eventLoop->maxfd)
@@ -275,6 +295,10 @@ static aeTimeEvent *aeSearchNearestTimer(aeEventLoop *eventLoop)
 
 /* Process time events */
 //处理定时事件
+/**
+ * 处理时间任务 ，比如定时处理等等
+ * @return
+ */
 static int processTimeEvents(aeEventLoop *eventLoop) {
     int processed = 0;
     aeTimeEvent *te;
@@ -430,12 +454,16 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
         /* Call the multiplexing API, will return only on timeout or when
          * some event fires. */
         //等待获取触发的事件直到超时,超时时间可以有最近需要执行的定时任务确定
-        numevents = aeApiPoll(eventLoop, tvp);
+        numevents = aeApiPoll(eventLoop, tvp); //这里用于 从 epoll获取 相应的事件
 
         /* After sleep callback. */
         if (eventLoop->aftersleep != NULL && flags & AE_CALL_AFTER_SLEEP)
             eventLoop->aftersleep(eventLoop);
 
+        /**
+         * wangyang **
+         * 将触发的事件 映射到 events 数组当中, 找到相应的 处理函数 然后进行相应的处理
+         */
         for (j = 0; j < numevents; j++) {
             aeFileEvent *fe = &eventLoop->events[eventLoop->fired[j].fd];
             int mask = eventLoop->fired[j].mask;
@@ -462,7 +490,7 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
              * Fire the readable event if the call sequence is not
              * inverted. */
             if (!invert && fe->mask & mask & AE_READABLE) {
-                fe->rfileProc(eventLoop,fd,fe->clientData,mask);
+                fe->rfileProc(eventLoop,fd,fe->clientData,mask); //wangyang ** 处理相应的读事件
                 fired++;
             }
 
@@ -518,11 +546,15 @@ int aeWait(int fd, int mask, long long milliseconds) {
     }
 }
 
+/**
+ * wangyang ** 事件开始循环
+ * @param eventLoop
+ */
 void aeMain(aeEventLoop *eventLoop) {
-    eventLoop->stop = 0;
+    eventLoop->stop = 0; //默认为0
     while (!eventLoop->stop) {
         if (eventLoop->beforesleep != NULL)
-            eventLoop->beforesleep(eventLoop);
+            eventLoop->beforesleep(eventLoop); //每次循环前触发的动作
         aeProcessEvents(eventLoop, AE_ALL_EVENTS|AE_CALL_AFTER_SLEEP);
     }
 }

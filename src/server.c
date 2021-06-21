@@ -68,6 +68,9 @@ double R_Zero, R_PosInf, R_NegInf, R_Nan;
 /*================================= Globals ================================= */
 
 /* Global vars */
+/**
+ * 全局结构体
+ */
 struct redisServer server; /* Server global state */
 volatile unsigned long lru_clock; /* Server global current LRU time. */
 
@@ -124,7 +127,12 @@ volatile unsigned long lru_clock; /* Server global current LRU time. */
  *    Note that commands that may trigger a DEL as a side effect (like SET)
  *    are not fast commands.
  */
+
+/*
+ * wangyang ** 存储所有的命令  在命令里面 混合相应的标志 , 标识相当于进行相应的分类
+ */
 struct redisCommand redisCommandTable[] = {
+
     {"module",moduleCommand,-2,"as",0,NULL,0,0,0,0,0},
     {"get",getCommand,2,"rF",0,NULL,1,1,1,0,0},
     {"set",setCommand,-3,"wm",0,NULL,1,1,1,0,0},
@@ -489,6 +497,9 @@ int dictSdsKeyCaseCompare(void *privdata, const void *key1,
 {
     DICT_NOTUSED(privdata);
 
+    /**
+     * wangyang strcasecmp 用于忽略大小写比较大些 0 相等
+     */
     return strcasecmp(key1, key2) == 0;
 }
 
@@ -524,6 +535,9 @@ uint64_t dictSdsHash(const void *key) {
 }
 
 //获取key的hash
+/*
+ * wangyang 用于获取key 的 hash value的 函数
+ */
 uint64_t dictSdsCaseHash(const void *key) {
     return dictGenCaseHashFunction((unsigned char*)key, sdslen((char*)key));
 }
@@ -612,6 +626,9 @@ dictType zsetDictType = {
 };
 
 /* Db->dict, keys are sds strings, vals are Redis objects. */
+/**
+ * wangyang ** db 字典类型 dup 指的是复制 双份的意思
+ */
 dictType dbDictType = {
     dictSdsHash,                /* hash function */
     NULL,                       /* key dup */
@@ -1582,6 +1599,13 @@ void createSharedObjects(void) {
 void initServerConfig(void) {
     int j;
     //初始化互斥锁
+    /**
+     * wangyang
+       这里会创建一个 互斥锁， 然后使用下面函数来使用
+       int pthread_mutex_lock(pthread_mutex_t *mutex)
+　　int pthread_mutex_unlock(pthread_mutex_t *mutex)
+　　int pthread_mutex_trylock(pthread_mutex_t *mutex)
+     */
     pthread_mutex_init(&server.next_client_id_mutex,NULL);
     pthread_mutex_init(&server.lruclock_mutex,NULL);
     pthread_mutex_init(&server.unixtime_mutex,NULL);
@@ -1597,11 +1621,14 @@ void initServerConfig(void) {
     server.configfile = NULL;
     server.executable = NULL;
     //定时任务每次执行时间 单位s
+    //定时任务实行时间 默认 10s
     server.hz = server.config_hz = CONFIG_DEFAULT_HZ;
     server.dynamic_hz = CONFIG_DEFAULT_DYNAMIC_HZ;
     server.arch_bits = (sizeof(long) == 8) ? 64 : 32;
+    //默认端口 6379
     server.port = CONFIG_DEFAULT_SERVER_PORT;
     //默认511
+    //tcp backlog 队列
     server.tcp_backlog = CONFIG_DEFAULT_TCP_BACKLOG;
     server.bindaddr_count = 0;
     server.unixsocket = NULL;
@@ -1782,7 +1809,7 @@ void initServerConfig(void) {
     server.commands = dictCreate(&commandTableDictType,NULL);
     server.orig_commands = dictCreate(&commandTableDictType,NULL);
     //填充命令字典表
-    populateCommandTable();
+    populateCommandTable(); //wangyang --> 这里会对 commands 数组进行填充
     server.delCommand = lookupCommandByCString("del");
     server.multiCommand = lookupCommandByCString("multi");
     server.lpushCommand = lookupCommandByCString("lpush");
@@ -2051,6 +2078,9 @@ int listenToPort(int port, int *fds, int *count) {
                 server.tcp_backlog);
         } else {
             /* Bind IPv4 address. */
+            /**
+             * wangyang  ** 这里会 对相应的 ip 地址 进行 监听
+             */
             fds[*count] = anetTcpServer(server.neterr,port,server.bindaddr[j],
                 server.tcp_backlog);
         }
@@ -2066,7 +2096,7 @@ int listenToPort(int port, int *fds, int *count) {
             return C_ERR;
         }
         anetNonBlock(NULL,fds[*count]);
-        (*count)++;
+        (*count)++; //wangyang 这里会让 count 逐渐增加
     }
     return C_OK;
 }
@@ -2124,7 +2154,7 @@ void initServer(void) {
     server.hz = server.config_hz;
     server.pid = getpid();
     server.current_client = NULL;
-    server.clients = listCreate();
+    server.clients = listCreate(); //--> client 节点
     server.clients_index = raxNew();
     server.clients_to_close = listCreate();
     server.slaves = listCreate();
@@ -2142,6 +2172,11 @@ void initServer(void) {
     createSharedObjects();//共享的一些对象,放到了shared结构中
     adjustOpenFilesLimit();//自适应file limit
     //初始化事件处理器
+    /**
+     * init server里面 创建 eventLoop 在server.c main里面调用 main循环函数
+     *
+     * wangyang ** 这里会 对 setsize 进行相应的设置 10000 * 98, 所以是足够用的
+     */
     server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);//创建event loop
     if (server.el == NULL) {
         serverLog(LL_WARNING,
@@ -2153,6 +2188,12 @@ void initServer(void) {
 
     /* Open the TCP listening socket for the user commands. */
     // 监听指定端口绑定ip
+    /**
+     * wangyang 这里会进行初始化
+     *
+     * 这里ipfd 是监听的 server 地址 ，会监听 本server 的所有地址
+     *
+     */
     if (server.port != 0 &&
         listenToPort(server.port,server.ipfd,&server.ipfd_count) == C_ERR)
         exit(1);
@@ -2238,6 +2279,17 @@ void initServer(void) {
      * domain sockets. */
     for (j = 0; j < server.ipfd_count; j++) {
         //注册指定的事件到epoll上
+        /*
+         * wangyang 这里将 server socket 注册到 epoll 上
+         *
+         * acceptTcpHandler 使用上可以 直接传入一个函数，便是函数指针
+         *
+         * ** 这里是对 server ip address 相应的socket 进行监听，然后监听read 时间，如果发生的话，说明有连接事件
+         * 那么使用 acceptHandler 函数进行处理
+         *
+         * ipfd 是对应的 ip 的 socketFD
+         *
+         */
         if (aeCreateFileEvent(server.el, server.ipfd[j], AE_READABLE,
             acceptTcpHandler,NULL) == AE_ERR)
             {
@@ -2703,7 +2755,7 @@ int processCommand(client *c) {
     if (server.requirepass && !c->authenticated && c->cmd->proc != authCommand)
     {
         flagTransaction(c);
-        addReply(c,shared.noautherr);
+        addReply(c,shared.noautherr); //wangyang --> 如果需要认证将 数据写入到 sendbuffer中
         return C_OK;
     }
 
@@ -2753,7 +2805,7 @@ int processCommand(client *c) {
             (c->cmd->flags & CMD_DENYOOM ||
              (c->flags & CLIENT_MULTI && c->cmd->proc != execCommand))) {
             flagTransaction(c);
-            addReply(c, shared.oomerr);
+            addReply(c, shared.oomerr); // wangyang 添加相应的相应
             return C_OK;
         }
     }
@@ -2858,7 +2910,7 @@ int processCommand(client *c) {
         queueMultiCommand(c);
         addReply(c,shared.queued);
     } else {
-        call(c,CMD_CALL_FULL);
+        call(c,CMD_CALL_FULL); //wangyang *** 这里真正执行 调用命令
         c->woff = server.master_repl_offset;
         if (listLength(server.ready_keys))
             handleClientsBlockedOnKeys();
@@ -4143,11 +4195,26 @@ int redisIsSupervised(int mode) {
     return 0;
 }
 
-
+//**arg
 int main(int argc, char **argv) {
     //保存当前时间
     struct timeval tv;
     int j;
+
+//    if (server == NULL) {
+//
+//    }
+/*
+ (1）若是指向结构体的指针，则判断其是否为NULL；
+（2）若是结构体的变量，由于在定义初始化变量时已分配内存，所以其只有数据有效和无效之分，没有空值之说，若是结构体内有指针，则判断同（1）。
+ */
+/**
+ *  结构体一开始就分配了，打印的时候需要指定格式 %d %p等，不能全部使用 %s
+ */
+    printf("redisserver pid==> %d \r\n", server.pid);
+    printf("rediserver hz ==>%d \r\n", server.hz); //0
+    printf("redisserver port==>%d \r\n", server.port);
+    printf("redisserver pointer==>%p \r\n", &server); //0x10c5a4bf8
 
 #ifdef REDIS_TEST
     if (argc == 3 && !strcasecmp(argv[1], "test")) {
@@ -4198,6 +4265,7 @@ int main(int argc, char **argv) {
     //判断是否哨兵模式
     server.sentinel_mode = checkForSentinelMode(argc,argv);
     //初始化配置
+    //wangyang 比较重要
     initServerConfig();
     //redis module初始化
     moduleInitModulesSystem();
@@ -4320,6 +4388,10 @@ int main(int argc, char **argv) {
     if (background)
         daemonize(); //后台运行
     //初始化server
+
+    /**
+     * wangyang 初始化 服务
+     */
     initServer();
     if (background || server.pidfile)
         createPidFile();//记录pid 默认位置 /var/run/redis.pid
@@ -4361,6 +4433,9 @@ int main(int argc, char **argv) {
 
     aeSetBeforeSleepProc(server.el,beforeSleep);
     aeSetAfterSleepProc(server.el,afterSleep);
+    /**
+     * wangyang 开启 事件主循环
+     */
     aeMain(server.el);
     aeDeleteEventLoop(server.el);
     return 0;

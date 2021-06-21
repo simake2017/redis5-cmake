@@ -169,6 +169,9 @@ void queueLoadModule(sds path, sds *argv, int argc) {
     listAddNodeTail(server.loadmodule_queue,loadmod);
 }
 
+/**
+ * wangyang ** 这里的config 是redis server 启动配置的参数
+ */
 //加载配置信息到server中
 void loadServerConfigFromString(char *config) {
     char *err = NULL;
@@ -176,6 +179,10 @@ void loadServerConfigFromString(char *config) {
     int slaveof_linenum = 0;
     sds *lines;
 
+    /**
+     * wangyang ** 这里会 解释 整个配置文件, 然后转为 相应的 line
+     * 比如 bind 127.0.0.1 port 6379 等
+     */
     lines = sdssplitlen(config,strlen(config),"\n",1,&totlines);
 
     for (i = 0; i < totlines; i++) {
@@ -189,7 +196,7 @@ void loadServerConfigFromString(char *config) {
         if (lines[i][0] == '#' || lines[i][0] == '\0') continue;
 
         /* Split into arguments */
-        argv = sdssplitargs(lines[i],&argc);
+        argv = sdssplitargs(lines[i],&argc); //-->wangyang 这里获取相应的 参数数量 会获取 所有的参数 比如 bind 127.0.0.1 那么就是 2
         if (argv == NULL) {
             err = "Unbalanced quotes in configuration line";
             goto loaderr;
@@ -234,7 +241,7 @@ void loadServerConfigFromString(char *config) {
                 err = "Too many bind addresses specified"; goto loaderr;
             }
             for (j = 0; j < addresses; j++)
-                server.bindaddr[j] = zstrdup(argv[j+1]);
+                server.bindaddr[j] = zstrdup(argv[j+1]); //wangyang 这里对相应的参数进行赋值
             server.bindaddr_count = addresses;
         } else if (!strcasecmp(argv[0],"unixsocket") && argc == 2) {
             server.unixsocket = zstrdup(argv[1]);
@@ -860,6 +867,9 @@ void loadServerConfig(char *filename, char *options) {
         config = sdscat(config,options);
     }
     //将配置加载到server中
+    /*
+     *
+     */
     loadServerConfigFromString(config);
     sdsfree(config);
 }

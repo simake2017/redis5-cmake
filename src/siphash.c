@@ -171,6 +171,14 @@ uint64_t siphash(const uint8_t *in, const size_t inlen, const uint8_t *k) {
 #endif
 }
 
+/**
+ *
+ in是输入 字符串
+ inlen 是 相应长度
+ k 是随机种子
+
+ 这里使用的是 sip hash 算法
+ */
 uint64_t siphash_nocase(const uint8_t *in, const size_t inlen, const uint8_t *k)
 {
 #ifndef UNALIGNED_LE_CPU

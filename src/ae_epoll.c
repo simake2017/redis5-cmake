@@ -32,6 +32,10 @@
 #include <sys/epoll.h>
 
 //保存epoll信息
+/*
+ * 这里保存的 是 epoll的结构信息 epfd 是 epoll 使用的文件句柄
+ * events是使用 epoll_wait 之后  将获取到的事件放到 events 数组中
+ */
 typedef struct aeApiState {
     //epoll专用文件句柄
     int epfd;
@@ -49,6 +53,9 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
         zfree(state);
         return -1;
     }
+    /**
+     * 这里用于创建 一个 epoll 对象
+     */
     //创建一个epoll
     state->epfd = epoll_create(1024); /* 1024 is just a hint for the kernel */
     if (state->epfd == -1) {
@@ -75,20 +82,30 @@ static void aeApiFree(aeEventLoop *eventLoop) {
     zfree(state);
 }
 
+/*
+ * wangyang **  这里用于 对 fd增加相关事件
+ */
 static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
     aeApiState *state = eventLoop->apidata;
     struct epoll_event ee = {0}; /* avoid valgrind warning */
     /* If the fd was already monitored for some event, we need a MOD
      * operation. Otherwise we need an ADD operation. */
-    int op = eventLoop->events[fd].mask == AE_NONE ?
+    int op = eventLoop->events[fd].mask == AE_NONE ? //--> 这里初始化的时候是none 所以对应的op 是add
             EPOLL_CTL_ADD : EPOLL_CTL_MOD;
 
     ee.events = 0;
-    mask |= eventLoop->events[fd].mask; /* Merge old events */
+    mask |= eventLoop->events[fd].mask; /* Merge old events */ //--> 将多个事件合并
+    /**
+     * wangyang ** 这里用于声明 epoll_event 用于处理的事件
+     */
     if (mask & AE_READABLE) ee.events |= EPOLLIN; //读事件
     if (mask & AE_WRITABLE) ee.events |= EPOLLOUT;//写事件
     ee.data.fd = fd; //socket fd
     //socket订阅epoll上指定事件
+    /**
+     * wangyang 将相应的 fd 添加到 epoll上
+     * 第一个参数是 bind socket ,第二个参数是相应的操作，比如add/mod,第三个操作时客户端socket ,第四个参数是注册的事件
+     */
     if (epoll_ctl(state->epfd,op,fd,&ee) == -1) return -1;
     return 0;
 }
@@ -111,16 +128,25 @@ static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int delmask) {
     }
 }
 
+/*
+ * 用于轮询 eventloop
+ */
 static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
     aeApiState *state = eventLoop->apidata;
     int retval, numevents = 0;
 
     //等待事件直到超时
+    /*
+     * 这里会调用 epoll_wait 函数，进行相应的阻塞，获取相关事件
+     */
     retval = epoll_wait(state->epfd,state->events,eventLoop->setsize,
             tvp ? (tvp->tv_sec*1000 + tvp->tv_usec/1000) : -1);
     if (retval > 0) {
         int j;
 
+        /*
+         * 这里获取相应的事件数量
+         */
         numevents = retval;
         for (j = 0; j < numevents; j++) {
             int mask = 0;
@@ -130,6 +156,9 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
             if (e->events & EPOLLOUT) mask |= AE_WRITABLE;
             if (e->events & EPOLLERR) mask |= AE_WRITABLE;
             if (e->events & EPOLLHUP) mask |= AE_WRITABLE;
+            /**
+             * 将获取到的事件 存放到 fired 数组中
+             */
             eventLoop->fired[j].fd = e->data.fd;
             eventLoop->fired[j].mask = mask;
         }

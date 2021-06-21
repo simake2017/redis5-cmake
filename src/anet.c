@@ -438,13 +438,22 @@ int anetWrite(int fd, char *buf, int count)
     return totlen;
 }
 
+/*
+ * 绑定 相应的端口
+ */
 static int anetListen(char *err, int s, struct sockaddr *sa, socklen_t len, int backlog) {
+    /*
+     * wangyang 这里是 bind 方法
+     */
     if (bind(s,sa,len) == -1) {
         anetSetError(err, "bind: %s", strerror(errno));
         close(s);
         return ANET_ERR;
     }
 
+    /**
+     * wangyang 这里是 listen 方法，让socket可以监听
+     */
     if (listen(s, backlog) == -1) {
         anetSetError(err, "listen: %s", strerror(errno));
         close(s);
@@ -475,12 +484,13 @@ static int _anetTcpServer(char *err, int port, char *bindaddr, int af, int backl
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;    /* No effect if bindaddr != NULL */
 
+    //wangyang --> 这里用于获取 ip地址，结果在 servinfo 里面
     if ((rv = getaddrinfo(bindaddr,_port,&hints,&servinfo)) != 0) {
         anetSetError(err, "%s", gai_strerror(rv));
         return ANET_ERR;
     }
     for (p = servinfo; p != NULL; p = p->ai_next) {
-        if ((s = socket(p->ai_family,p->ai_socktype,p->ai_protocol)) == -1)
+        if ((s = socket(p->ai_family,p->ai_socktype,p->ai_protocol)) == -1) //wangyang ** 这里会对相应的 ip地址 创建 socket , 然后返回 socketFD
             continue;
 
         if (af == AF_INET6 && anetV6Only(err,s) == ANET_ERR) goto error;
@@ -501,6 +511,9 @@ end:
     return s;
 }
 
+/*
+ * wangyang ** 这里返回的是 根据ip 创建的socket 的FD
+ */
 int anetTcpServer(char *err, int port, char *bindaddr, int backlog)
 {
     return _anetTcpServer(err, port, bindaddr, AF_INET, backlog);
@@ -530,10 +543,21 @@ int anetUnixServer(char *err, char *path, mode_t perm, int backlog)
 }
 
 //socket accept
+/*
+ * wangyang **
+ *
+ * sockaddr 是c语言结构体
+ * socklen_t 是 结构体的长度 也是c语言结构体
+ *
+ 函数说明：accept()用来接受参数s 的socket 连线. 参数s 的socket 必需先经bind()、listen()函数处理过,
+ 当有连线进来时accept()会返回一个新的socket 处理代码, 往后的数据传送与读取就是经由新的socket处理,
+ 而原来参数s 的socket 能继续使用accept()来接受新的连线要求.
+ 连线成功时, 参数addr 所指的结构会被系统填入远程主机的地址数据, 参数addrlen 为scokaddr 的结构长度
+ */
 static int anetGenericAccept(char *err, int s, struct sockaddr *sa, socklen_t *len) {
     int fd;
     while(1) {
-        fd = accept(s,sa,len);
+        fd = accept(s,sa,len); //wangyang ** 用于接收 socket 返回值为 socketFD数字
         if (fd == -1) {
             if (errno == EINTR)
                 continue;
@@ -547,6 +571,24 @@ static int anetGenericAccept(char *err, int s, struct sockaddr *sa, socklen_t *l
     return fd;
 }
 
+/*
+ struct sockaddr {
+	__uint8_t       sa_len;
+sa_family_t     sa_family;
+char            sa_data[14];
+};
+ */
+
+/*
+ * 下面的参数 覆盖上面，所以可以转换
+struct sockaddr_storage {
+	__uint8_t       ss_len;
+sa_family_t     ss_family;
+char                    __ss_pad1[_SS_PAD1SIZE];
+__int64_t       __ss_align;
+char                    __ss_pad2[_SS_PAD2SIZE];
+};
+*/
 //获取accept socket fd
 int anetTcpAccept(char *err, int s, char *ip, size_t ip_len, int *port) {
     int fd;//socket accept fd
@@ -557,9 +599,15 @@ int anetTcpAccept(char *err, int s, char *ip, size_t ip_len, int *port) {
 
     //ip4
     if (sa.ss_family == AF_INET) {
+        /*
+         wangyang
+         sin_family指代协议族，在socket编程中只能是AF_INET.
+        sin_port存储端口号（使用网络字节顺序） --> 这里指的 是 客户端端口号
+        sin_addr存储IP地址，使用in_addr这个数据结构
+         */
         struct sockaddr_in *s = (struct sockaddr_in *)&sa;
-        if (ip) inet_ntop(AF_INET,(void*)&(s->sin_addr),ip,ip_len);
-        if (port) *port = ntohs(s->sin_port);
+        if (ip) inet_ntop(AF_INET,(void*)&(s->sin_addr),ip,ip_len); //将数值格式转化为点分十进制的ip地址格式
+        if (port) *port = ntohs(s->sin_port); // wangyang ** 将端口转为 主机字节序列
     } else {
         struct sockaddr_in6 *s = (struct sockaddr_in6 *)&sa;
         if (ip) inet_ntop(AF_INET6,(void*)&(s->sin6_addr),ip,ip_len);

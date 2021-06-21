@@ -45,10 +45,18 @@
 #define DICT_NOTUSED(V) ((void) V)
 
 //hash table中的entry
+/**
+ * dictEntry 结构
+ */
 typedef struct dictEntry {
     //key
     void *key;
     //值
+    /**
+     * 用 union
+     * 这里可以读出一个 指针，可以是无符号数 可以是 int 有符号数
+     * 或者double类型，都是8个字节
+     */
     union {
         void *val;
         //无符号
@@ -58,9 +66,16 @@ typedef struct dictEntry {
         double d;
     } v;
     //下一个entry
+    /**
+     * 新加入的节点总是放在 链表的开头位置
+     */
     struct dictEntry *next;
 } dictEntry;
 
+/**
+ * wangyang  dictType中定义了 相关的操作，使用的是函数指针的方式
+ * 比如 hashFunction keyDup keyCompare等函数
+ */
 typedef struct dictType {
     //获取key的hash
     uint64_t (*hashFunction)(const void *key);
@@ -76,24 +91,57 @@ typedef struct dictType {
 /* This is our hash table structure. Every dictionary has two of this as we
  * implement incremental rehashing, for the old to the new table. */
 //字典的hash表
+/**
+ * wangyang 用于整个表
+ */
 typedef struct dictht {
     //hash table 存储数据
+    /**
+     * 这里是一个 二级指针，一个指向 dictEntry指针的指针，
+     * 某个dictEntry 放到某个位置，首先是根据dictType中的  hash函数
+     * 然后根据获取的hash值跟 sizemask 做一定的掩码运算，以便获取比较散列的分步
+     */
+     /**
+      * table 是一个 二级指针，其实也就是一个指针数组 * *dictEntry 这样的数组
+      */
     dictEntry **table;
     //hash table长度 2^n
     unsigned long size;
     //hash table长度的掩码  2^n-1
-    unsigned long sizemask;
+    unsigned long sizemask; //用于做掩码运算
     //已经使用多少
     unsigned long used;
 } dictht;
 
+/**
+ * 目录结构
+ * wangyang 正常情况下使用
+ * 这里用于表示一个 hash 表，两个ht 是因为要用于扩容和缩容使用
+ * rehash是用于渐进式rehash 会从0然后逐渐增大，直到将ht[0] 扩展到ht[1]
+ * 里面去，然后再讲rehash 设为-1
+ * 渐进式过程中 add操作只在ht1上 增删改在ht0 ht1上面
+ *
+ */
 typedef struct dict {
     //dic表的方法  eg.获取key的hash,比较key...
+    /**
+     * wangyang 这会指向一个type结构，里面存放对应的操作函数，
+     * 比如 获取一个hash 复制键 销毁键等等
+     */
     dictType *type;
+    /**
+     * 这里保存了 需要传给特定类型函数的可选参数
+     */
     void *privdata;
     //hash表，一个ht[0]->ht[1]实现rehash
+    /**
+     * wangyang 一般来说使用ht[0] ht[1]用于当rehash 的时候使用
+     */
     dictht ht[2];
     //hash表中扩容到哪个槽了 -1:表示没有在扩容
+    /**
+     * 渐进式 rehash 结构体
+     */
     long rehashidx; /* rehashing not in progress if rehashidx == -1 */
     //正在遍历字典表的需求有多少个
     unsigned long iterators; /* number of iterators currently running */

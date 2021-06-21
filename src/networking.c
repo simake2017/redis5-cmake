@@ -79,13 +79,16 @@ void linkClient(client *c) {
     /* Note that we remember the linked list node where the client is stored,
      * this way removing the client in unlinkClient() will not require
      * a linear scan, but just a constant time operation. */
-    c->client_list_node = listLast(server.clients);
+    c->client_list_node = listLast(server.clients); //--> wangyang  将客户端 组织成链表结构
     uint64_t id = htonu64(c->id);
     raxInsert(server.clients_index,(unsigned char*)&id,sizeof(id),c,NULL);
 }
 
+/*
+ * wangyang 创建 客户端
+ */
 client *createClient(int fd) {
-    client *c = zmalloc(sizeof(client));
+    client *c = zmalloc(sizeof(client)); //
 
     /* passing -1 as fd it is possible to create a non connected client.
      * This is useful since all the commands needs to be executed
@@ -101,6 +104,10 @@ client *createClient(int fd) {
             anetKeepAlive(NULL,fd,server.tcpkeepalive);
 
         //注册到epoll监听可读事件
+        /**
+         * wangyang *** 这里会将 这个 fd(客户端 socketFD) 注册到 eventLoop 上
+         * readQueryFromClient 是从客户端读取数据的函数
+         */
         if (aeCreateFileEvent(server.el,fd,AE_READABLE,
             readQueryFromClient, c) == AE_ERR)
         {
@@ -750,6 +757,9 @@ static void acceptCommonHandler(int fd, int flags, char *ip) {
     c->flags |= flags;
 }
 
+/*
+ * wangyang ** 用于接收 tcp 连接事件
+ */
 //服务端socket读事件处理器，创建连接
 void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     //cport:端口
@@ -762,8 +772,7 @@ void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     UNUSED(mask);
     UNUSED(privdata);
     //每次事件循环最多可以处理1000个客户端的连接
-    while(max--) {
-        //获取accept socket fd
+    while(max--) { //wangyang  每次最多处理 1000个 循环 //获取accept socket fd
         cfd = anetTcpAccept(server.neterr, fd, cip, sizeof(cip), &cport);
         if (cfd == ANET_ERR) {
             if (errno != EWOULDBLOCK)
@@ -1593,6 +1602,9 @@ void processInputBufferAndReplicate(client *c) {
     }
 }
 
+/*
+ * wangyang ** 从客户端读取数据
+ */
 //从客户端读数据
 void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
     client *c = (client*) privdata;
@@ -1621,12 +1633,12 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
     }
 
     //client缓冲已使用的字节数
-    qblen = sdslen(c->querybuf);
+    qblen = sdslen(c->querybuf); //-->wangyang 表示客户端已使用缓冲
     if (c->querybuf_peak < qblen) c->querybuf_peak = qblen;
     //扩容
     c->querybuf = sdsMakeRoomFor(c->querybuf, readlen);
     //读取readlen字节到querybuf中(从qblen处开始)
-    nread = read(fd, c->querybuf+qblen, readlen);
+    nread = read(fd, c->querybuf+qblen, readlen); //wangyang ** 这里是使用 c 语言read 函数读取数据
     //-1 出现错误
     if (nread == -1) {
         //需要重试

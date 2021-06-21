@@ -44,6 +44,9 @@ typedef struct listIter {
     int direction;
 } listIter;
 
+/**
+ * wangyang redis 自己封装的 list 结构，是链表结构
+ */
 typedef struct list {
     listNode *head;
     listNode *tail;

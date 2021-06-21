@@ -647,6 +647,10 @@ typedef struct clientReplyBlock {
  * by integers from 0 (the default database) up to the max configured
  * database. The database number is the 'id' field in the structure. */
 //redis数据库结构
+/**
+ * wangyang redis db核心结构
+ * 每个db 代表一个数据库 根据redisServer 中dbNum进行创建对应数量的
+ */
 typedef struct redisDb {
     //kv字典
     dict *dict;                 /* The keyspace for this DB */
@@ -731,6 +735,9 @@ typedef struct readyList {
 
 /* With multiplexing we need to take per-client state.
  * Clients are taken in a linked list. */
+/**
+ * wangyang 客户端连接 结构体
+ */
 typedef struct client {
     //client id
     uint64_t id;            /* Client incremental unique ID. */
@@ -859,20 +866,41 @@ struct sharedObjectsStruct {
 };
 
 /* ZSETs use a specialized version of Skiplists */
+/**
+ * wangyang 跳跃表节点 代表的是一个 节点
+ *
+ * 这里跳跃表的结构 是这样的
+ *
+ * --> 这个方向在redis 中叫做向前
+ * hader-->list1-->list2-->list3-->>tail
+ *
+ * 每个节点都是下面这样的结构，有一个字符串，有一个分数，然后有一个level数组，里面存放的是level节点
+ * 就如下面 结构 每个level节点里面的 forward 都会指向一个 listNode 节点，span 表示这个节点到下个节点
+ * 要经过几个节点的跨度
+ *
+ * backward 节点表示的是从tail节点往前面head节点的指针
+ *
+ *
+ */
 typedef struct zskiplistNode {
-    sds ele;
-    double score;
-    struct zskiplistNode *backward;
+    sds ele; //字符串
+    double score; //对应的分数
+    struct zskiplistNode *backward; //后继节点
     struct zskiplistLevel {
         struct zskiplistNode *forward;
         unsigned long span;
     } level[];
 } zskiplistNode;
 
+/**
+ * 跳跃表
+ *
+ * head 节点 会有很多层次 比如32层，但是指向的节点都是NULL，所以这里的level 指的是实际对应的节点
+ */
 typedef struct zskiplist {
     struct zskiplistNode *header, *tail;
-    unsigned long length;
-    int level;
+    unsigned long length; //--> 跳跃表节点的数量，表头节点不算在内
+    int level; // 记录最大的 level 表头节点不算
 } zskiplist;
 
 typedef struct zset {
@@ -993,6 +1021,9 @@ struct clusterState;
 #define CHILD_INFO_TYPE_RDB 0
 #define CHILD_INFO_TYPE_AOF 1
 
+/**
+ * wangyang ** redis 核心结构
+ */
 struct redisServer {
     /* General */
     pid_t pid;                  /* Main process pid. */
@@ -1013,6 +1044,9 @@ struct redisServer {
     //redis 数据库
     redisDb *db;
     //命令字典表  cmdname->cmd
+    /*
+     * 将 RedisCommandTable 转为 一个字典
+     */
     dict *commands;             /* Command table */
     //命令字典表  cmdname->cmd，命令重命名不影响这部分
     dict *orig_commands;        /* Command table before command renaming. */
@@ -1060,6 +1094,9 @@ struct redisServer {
     //监听的socket
     int ipfd[CONFIG_BINDADDR_MAX]; /* TCP socket file descriptors */
     //监听的socket数量
+    /*
+     * 这里初始的时候是0 在 listen 的时候逐渐增加
+     */
     int ipfd_count;             /* Used slots in ipfd[] */
     //unix socket
     int sofd;                   /* Unix socket file descriptor */
@@ -1099,6 +1136,9 @@ struct redisServer {
     time_t loading_start_time;
     off_t loading_process_events_interval_bytes;
     /* Fast pointers to often looked up command */
+    /*
+     * 下列是 经常使用的命令 这里会进行相应的缓存 方便使用
+     */
     struct redisCommand *delCommand, *multiCommand, *lpushCommand,
                         *lpopCommand, *rpopCommand, *zpopminCommand,
                         *zpopmaxCommand, *sremCommand, *execCommand,
@@ -1184,6 +1224,9 @@ struct redisServer {
     //客户端查询缓存大小限制
     size_t client_max_querybuf_len; /* Limit for client query buffer length */
     //db总数量默认16
+    /**
+     * db数量
+     */
     int dbnum;                      /* Total number of configured DBs */
     int supervised;                 /* 1 if supervised, 0 otherwise. */
     int supervised_mode;            /* See SUPERVISED_* */
@@ -1542,6 +1585,11 @@ typedef struct pubsubPattern {
 
 typedef void redisCommandProc(client *c);
 typedef int *redisGetKeysProc(struct redisCommand *cmd, robj **argv, int argc, int *numkeys);
+
+/**
+ * wangyang redis 命令命令结构体
+ *
+ */
 struct redisCommand {
     //命令名称
     char *name;

@@ -57,6 +57,25 @@ void zlibc_free(void *ptr) {
 #endif
 
 /* Explicitly override malloc/free etc when using tcmalloc. */
+/**
+ * wangyang 这里首先判断 相关的malloc 函数 首先使用tc_malloc函数 如果
+ * 有 jemalloc 那么使用 jemalloc 函数
+ *
+ * redis 的内存分配 还是 需要每次使用的时候 使用os 申请分配
+ * 比如 首先确认一个结构体，然后分配一个 对象的大小，这里面重要的是往这个结构体中读写数据
+ * 申请 内存 并不是频繁的操作,所以 并不需要 预先分配 内存 这一点跟mysql 预先分配 buffer pool不同
+ *
+ */
+ /*
+  *
+  *
+  calloc
+函数返回值为void型指针。如果执行成功，函数从堆上获得size X n的字节空间，并返回该空间的首地址。如果执行失败，函数返回NULL。该函数与malloc函数的一个显著不同时是，calloc函数得到的内存空间是经过初始化的，其内容全为0。calloc函数适合为数组申请空间，可以将size设置为数组元素的空间长度，将n设置为数组的容量。
+
+
+  realloc
+  其中，指针p必须为指向堆内存空间的指针，即由malloc函数、calloc函数或realloc函数分配空间的指针。realloc函数将指针p指向的内存块的大小改变为n字节。如果n小于或等于p之前指向的空间大小，那么。保持原有状态不变。如果n大于原来p之前指向的空间大小，那么，系统将重新为p从堆上分配一块大小为n的内存空间，同时，将原来指向空间的内容依次复制到新的内存空间上，p之前指向的空间被释放。relloc函数分配的空间也是未初始化的。
+  */
 #if defined(USE_TCMALLOC)
 #define malloc(size) tc_malloc(size)
 #define calloc(count,size) tc_calloc(count,size)
@@ -97,6 +116,10 @@ static void zmalloc_default_oom(size_t size) {
 //函数指针 指向函数的指针  void (*aa)()
 static void (*zmalloc_oom_handler)(size_t) = zmalloc_default_oom;
 
+/*
+ * wangyang  zmalloc 分配一个 固定大小的 内存空间
+ * todo 具体怎么分配 需要了解清楚
+ */
 void *zmalloc(size_t size) {
     //根据宏定义的malloc使用具体的分配内存工具
     void *ptr = malloc(size+PREFIX_SIZE);
